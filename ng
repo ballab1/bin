@@ -1,0 +1,98 @@
+#!/bin/bash
+
+set -o errexit
+declare progname=$( basename $0 )
+
+#-----------------------------------------------------------------------------------
+function nginx_status()
+{
+        local -r logdir=$1
+
+	printf "\n"
+	echo "Active files in: $logdir"
+        ls -Al $logdir | egrep -v  '(\w\s+0\s\w)|(^total)'
+	printf "\n"
+	while read file; do
+	  if [ -s ${logdir}/$file ]; then
+	     echo "cat $logdir/$file"
+	     cat $logdir/$file
+	     printf "\n"
+	  fi
+	done < <(ls -1 $logdir)
+	printf "\n"
+}
+
+#-----------------------------------------------------------------------------------
+function nginx_reload()
+{
+        local -r logdir=$1
+        touch $logdir/xxx
+	rm $logdir/*
+        /usr/sbin/nginx -t
+
+	systemctl reload nginx
+}
+
+#-----------------------------------------------------------------------------------
+function nginx_stop()
+{
+        local -r logdir=$1
+
+	systemctl stop nginx
+#	systemctl stop nagios
+	nginx_status $logdir
+}
+
+#-----------------------------------------------------------------------------------
+function nginx_start()
+{
+        local -r logdir=$1
+        touch $logdir/xxx
+	rm $logdir/*
+        /usr/sbin/nginx -t
+	systemctl start nginx
+}
+
+#-----------------------------------------------------------------------------------
+function usage()
+{
+    declare exit_status=${1:-1}
+    declare extended_help=${2:-0}
+
+    cat >&2 << EOF
+Usage:
+    $progname [<options>]
+
+    Common options:
+        -h --help       Display a basic set of usage instructions
+        -b --start      Remove old logs, then start nginx process
+        -r --reload     reload ngnix configuration
+        -s --status     how log files
+        -x --stop       Stop nginx, then display the log files
+EOF
+}
+
+
+#-----------------------------------------------------------------------------------
+# Process command line arguments
+process_arguments()
+{
+    local -r logdir='/var/log/nginx'
+    while [ "$1" != "" ]
+    do
+        case $1 in
+        -h|--help) usage; exit 1;;
+        -b|--start) nginx_start $logdir ; exit 0;;
+        -r|--reload) nginx_reload $logdir ; exit 0;;
+        -s|--status) nginx_status $logdir ; exit 0;;
+        -x|--stop)  nginx_stop $logdir ; exit 0;;
+        *)          echo 'need to specify something'; exit 1;;
+        esac
+        shift
+    done
+}
+
+#-----------------------------------------------------------------------------------
+
+process_arguments "$@"
+
