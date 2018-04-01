@@ -1,0 +1,28 @@
+#!/bin/bash -x
+
+set -o errexit
+
+declare -A TEST
+
+echo "${#TEST[*]}"
+
+if [[ ${#TEST[*]} -eq 0 ]]; then
+   declare -A TEST=()
+fi
+
+
+TEST['a']='a'
+TEST['b']='a'
+TEST['c']='a'
+TEST['d']='a'
+TEST['e']='a'
+
+echo "${#TEST[*]}"
+declare -A TEST
+
+if [[ ${#TEST[*]} -eq 0 ]]; then
+   declare -A TEST=()
+fi
+declare -A TEST
+
+echo "${#TEST[*]}"

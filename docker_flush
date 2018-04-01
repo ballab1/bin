@@ -4,12 +4,10 @@ declare -a containers
 #set -o xtrace
 
 containers="$(docker ps -q)"
+[[ "${containers[@]}" ]] && docker stop ${containers[@]}
+containers="$(docker ps -aq --filter "status=running" --filter "status=restarting" --filter "status=paused")"
 [[ "${containers[@]}" ]] && docker kill ${containers[@]}
-containers="$(docker images -a -q)"
-[[ "${containers[@]}" ]] && docker rmi -f ${containers[@]}
-containers="$(docker images -a --filter=dangling=true -q)"
-[[ "${containers[@]}" ]] && docker rmi -f ${containers[@]}
-containers="$(docker ps --filter=status=exited --filter=status=created -q)"
+containers="$(docker ps -aq)"
 [[ "${containers[@]}" ]] && docker rm -f ${containers[@]}
-containers="$(docker images -a -q)"
+containers="$(docker images -aq)"
 [[ "${containers[@]}" ]] && docker rmi -f ${containers[@]}

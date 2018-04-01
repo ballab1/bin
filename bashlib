@@ -1,0 +1,45 @@
+#!/bin/bash
+#############################################################################
+#
+#   bashlib.sh
+#
+#############################################################################
+function perlmodver {
+  perl -M$1 -e 'print "Version ".$ARGV[0]->VERSION." of ".$ARGV[0]." is installed.\n";' $1
+}
+
+#############################################################################
+function rmOldContainers()
+{   
+    [[ $(docker ps -a --filter "name=_" --format "{{.Names}}") ]] && \
+        docker rm -f $(docker ps -a --filter "name=_" --format "{{.Names}}")
+    [[ $(docker ps -a --filter "status=exited" --filter "status=dead" --format "{{.Names}}") ]] && \
+        docker rm $(docker ps -a --filter "status=exited" --filter "status=dead" --format "{{.Names}}")
+    [[ $(docker images -f "dangling=true" -q) ]] && \
+        docker rmi $(docker images -f "dangling=true" -q)
+    docker images
+}
+
+#############################################################################
+function cbfRepos()
+{
+   git submodule status --recursive | grep 'build/container' | awk '{ print $2 }'
+}
+
+#############################################################################
+function dockerImages()
+{
+   docker images
+}
+
+#############################################################################
+function dockerProcesses()
+{
+   docker ps --format "table {{.Names}}\t{{.ID}}\t{{.Size}}\t{{.Status}}\t{{.RunningFor}}\t{{.Ports}}"
+}
+
+#############################################################################
+function dockerNetworks()
+{
+   docker network inspect $( docker network ls | grep 'default' | awk "{ print \$1 }") | jq ".[].Containers|.[]|[.IPv4Address + \" : \" + .Name]|.[]" | sort -t "." -k 4g
+}
