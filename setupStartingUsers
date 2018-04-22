@@ -1,0 +1,17 @@
+#!/bin/bash 
+
+. ~/bin/bashlib
+
+set -v
+
+createUserAndGroup docker   998 docker   998 '--no-create-home' /sbin/nologin
+createUserAndGroup mysql    999 mysql    999 '--no-create-home' /sbin/nologin
+createUserAndGroup nginx   1001 nginx   1001 '--no-create-home' /sbin/nologin
+createUserAndGroup nagios  1002 nagios  1002 '--no-create-home' /sbin/nologin
+createUserAndGroup jenkins 1003 jenkins 1003 '--no-create-home' /sbin/nologin
+createUserAndGroup webdav  2222 webdav  2222 '--no-create-home' /sbin/nologin
+usermod  -u 82 www-data
+groupmod -g 82 www-data
+usermod -G docker,jenkins,nginx,nagios,www-data,webdav bobb
+chown jenkins:jenkins -R /home/bobb/prod/jenkins/vols/jenkins_home
+

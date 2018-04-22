@@ -14,8 +14,12 @@ function createUserAndGroup()
     local -r homedir=$5
     local -r shell=$6 
 
-    /usr/sbin/groupadd --gid "${gid}" "${group}" 
-    /usr/sbin/useradd --home-dir "$homedir" --uid "${uid}" --gid "${gid}" --no-create-home --shell "${shell}" "${user}" 
+    /usr/sbin/groupadd --gid "${gid}" "${group}"
+    if [ "$homedir" = '--no-create-home' ]; then
+        /usr/sbin/useradd  --no-create-home --uid "${uid}" --gid "${gid}" --shell "${shell}" "${user}" 
+    else
+        /usr/sbin/useradd --home-dir "$homedir" --uid "${uid}" --gid "${gid}" --shell "${shell}" "${user}" 
+    fi
 }
 
 #############################################################################
