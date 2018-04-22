@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd ~/support.dev
+cd ~/support
 docker-compose build base
 docker-compose build openjdk
 docker-compose build supervisord

@@ -4,6 +4,21 @@
 #   bashlib.sh
 #
 #############################################################################
+
+function createUserAndGroup()
+{
+    local -r user=$1
+    local -r uid=$2
+    local -r group=$3
+    local -r gid=$4
+    local -r homedir=$5
+    local -r shell=$6 
+
+    /usr/sbin/groupadd --gid "${gid}" "${group}" 
+    /usr/sbin/useradd --home-dir "$homedir" --uid "${uid}" --gid "${gid}" --no-create-home --shell "${shell}" "${user}" 
+}
+
+#############################################################################
 function perlmodver {
   perl -M$1 -e 'print "Version ".$ARGV[0]->VERSION." of ".$ARGV[0]." is installed.\n";' $1
 }
