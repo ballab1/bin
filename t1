@@ -2,6 +2,20 @@
 
 set -o errexit
 
+function tst() {
+    local -r arrayName=$1
+    
+    local -r array=$(eval "echo \${!$arrayName[@]}")
+    echo "$array"
+
+    for i in $array
+    do
+      echo "key  : $i"
+      echo "value: $( eval "echo \${$arrayName[$i]}" )"
+    done
+}
+
+
 declare -A TEST
 
 echo "${#TEST[*]}"
@@ -11,11 +25,15 @@ if [[ ${#TEST[*]} -eq 0 ]]; then
 fi
 
 
-TEST['a']='a'
-TEST['b']='a'
-TEST['c']='a'
-TEST['d']='a'
-TEST['e']='a'
+TEST['a']='a1'
+TEST['b']='a2'
+TEST['c']='a3'
+TEST['d']='a4'
+TEST['e']='a5'
+
+declare x="$(declare -p TEST)"
+x=${x#*=}
+echo $x
 
 echo "${#TEST[*]}"
 declare -A TEST
@@ -26,3 +44,5 @@ fi
 declare -A TEST
 
 echo "${#TEST[*]}"
+
+tst "TEST"
