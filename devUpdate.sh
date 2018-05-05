@@ -6,6 +6,7 @@ export  CBF_VERSION=dev
 set -o verbose
 
 cd ~/support
+
 docker-compose build base
 docker-compose build openjdk
 docker-compose build supervisord
