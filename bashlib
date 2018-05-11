@@ -29,13 +29,13 @@ function perlmodver {
 
 #############################################################################
 function rmOldContainers()
-{   
-    [[ $(docker ps -a --filter "name=_" --format "{{.Names}}") ]] && \
-        docker rm -f $(docker ps -a --filter "name=_" --format "{{.Names}}")
-    [[ $(docker ps -a --filter "status=exited" --filter "status=dead" --format "{{.Names}}") ]] && \
-        docker rm $(docker ps -a --filter "status=exited" --filter "status=dead" --format "{{.Names}}")
-    [[ $(docker images -f "dangling=true" -q) ]] && \
-        docker rmi $(docker images -f "dangling=true" -q)
+{
+    local -a containers=$(docker ps --all --filter "name=_" --format "{{.Names}}")
+    [ ${#containers[@]} -eq 0 ] || docker rm --force ${containers[@]}
+    containers=$(docker ps -a --filter "status=exited" --filter "status=dead" --format "{{.Names}}")
+    [ ${#containers[@]} -eq 0 ] || docker rm ${containers[@]}
+    containers=$(docker images --filter "dangling=true" --quiet)
+    [ ${#containers[@]} -eq 0 ] || docker rmi ${containers[@]}
     docker images
 }
 
