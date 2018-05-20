@@ -23,26 +23,30 @@ function createUserAndGroup()
 }
 
 #############################################################################
-function perlmodver {
+function perlmodver
+{
   perl -M$1 -e 'print "Version ".$ARGV[0]->VERSION." of ".$ARGV[0]." is installed.\n";' $1
 }
 
 #############################################################################
 function rmOldContainers()
 {
-    local -a containers=$(docker ps --all --filter "name=_" --format "{{.Names}}")
-    [ ${#containers[@]} -eq 0 ] || docker rm --force ${containers[@]}
-    containers=$(docker ps -a --filter "status=exited" --filter "status=dead" --format "{{.Names}}")
-    [ ${#containers[@]} -eq 0 ] || docker rm ${containers[@]}
-    containers=$(docker images --filter "dangling=true" --quiet)
-    [ ${#containers[@]} -eq 0 ] || docker rmi ${containers[@]}
+    local -a containers=( $(docker ps --all --filter "name=_" --format "{{.Names}}") )
+    [ ${#containers[@]} -eq 0 ] || docker rm --force "${containers[@]}"
+    containers=( $(docker ps -a --filter "status=exited" --filter "status=dead" --format "{{.Names}}") )
+    [ ${#containers[@]} -eq 0 ] || docker rm "${containers[@]}"
+    containers=( $(docker images --filter "dangling=true" --quiet) )
+    [ ${#containers[@]} -eq 0 ] || docker rmi "${containers[@]}"
     docker images
 }
 
 #############################################################################
-function cbfRepos()
+function findInProjects()
 {
-   git submodule status --recursive | grep 'build/container' | awk '{ print $2 }'
+    cd /home/bobb
+    for f in $(sudo find support prod -maxdepth 4 -type d -name 'build' | sort); do
+        grep -r "$1" "$f"
+    done
 }
 
 #############################################################################
@@ -61,4 +65,12 @@ function dockerProcesses()
 function dockerNetworks()
 {
    docker network inspect $( docker network ls | grep 'default' | awk "{ print \$1 }") | jq ".[].Containers|.[]|[.IPv4Address + \" : \" + .Name]|.[]" | sort -t "." -k 4g
+}
+
+#############################################################################
+function removeCurrentContainers()
+{
+    local -a containers=( $(docker images -q -f "reference=*:2018*"  --format "{{.Repository}}:{{.Tag}}") )
+    [ ${#containers[@]} -eq 0 ] || docker rmi --force "${containers[@]}"
+    docker images
 }
