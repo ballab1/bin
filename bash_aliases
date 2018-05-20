@@ -1,5 +1,5 @@
 source ~/bin/bashlib
-source ~/.git-prompt.sh
+source ~/bin/git-prompt.sh
 
 alias cbr='cbfRepos'
 alias dc='docker-compose'
