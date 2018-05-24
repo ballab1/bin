@@ -34,7 +34,7 @@ function rmOldContainers()
     local -a containers=()
 #    containers+=( $(docker ps --all --quiet --filter "status=exited" --filter "name=_" --format "{{.Names}}") )
     containers+=( $(docker ps --all --quiet --filter "status=exited" --filter "status=dead" --format "{{.Names}}") )
-    containers=( $(printf "%s\n" "${containers[@]}") | uniq )
+    containers=( $(printf "%s\n" "${containers[@]}" | uniq ) )
     [ ${#containers[@]} -eq 0 ] || docker rm --volumes "${containers[@]}"
 
     containers=( $(docker images --quiet --filter "dangling=true") )
@@ -47,10 +47,12 @@ function rmOldContainers()
         volumes+=( $(docker inspect "$v" | jq -r '.[] | .Mounts | .[] | .Name | select(.)') )
     done
     local -a dirs=()
-    for v in $(printf "%s\n" "${volumes[@]}") | uniq )
+    for v in $(printf "%s\n" "${volumes[@]}" | uniq ); do
         dirs+=( $(sudo find '/var/lib/docker/volumes/' -mindepth 1 -maxdepth 1 -type d | grep -vFf "$v") )
     done
     sudo rm -rf "${dirs[@]}"
+
+    docker images
 }
 
 #############################################################################
