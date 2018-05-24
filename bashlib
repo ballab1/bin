@@ -31,13 +31,26 @@ function perlmodver
 #############################################################################
 function rmOldContainers()
 {
-    local -a containers=( $(docker ps --all --filter "name=_" --format "{{.Names}}") )
-    [ ${#containers[@]} -eq 0 ] || docker rm --force "${containers[@]}"
-    containers=( $(docker ps -a --filter "status=exited" --filter "status=dead" --format "{{.Names}}") )
-    [ ${#containers[@]} -eq 0 ] || docker rm "${containers[@]}"
-    containers=( $(docker images --filter "dangling=true" --quiet) )
+    local -a containers=()
+#    containers+=( $(docker ps --all --quiet --filter "status=exited" --filter "name=_" --format "{{.Names}}") )
+    containers+=( $(docker ps --all --quiet --filter "status=exited" --filter "status=dead" --format "{{.Names}}") )
+    containers=( $(printf "%s\n" "${containers[@]}") | uniq )
+    [ ${#containers[@]} -eq 0 ] || docker rm --volumes "${containers[@]}"
+
+    containers=( $(docker images --quiet --filter "dangling=true") )
     [ ${#containers[@]} -eq 0 ] || docker rmi "${containers[@]}"
-    docker images
+    unset containers
+
+    # remove directories associated with unused volumes
+    local -a volumes=()
+    for v in $(docker ps --all --quiet); do
+        volumes+=( $(docker inspect "$v" | jq -r '.[] | .Mounts | .[] | .Name | select(.)') )
+    done
+    local -a dirs=()
+    for v in $(printf "%s\n" "${volumes[@]}") | uniq )
+        dirs+=( $(sudo find '/var/lib/docker/volumes/' -mindepth 1 -maxdepth 1 -type d | grep -vFf "$v") )
+    done
+    sudo rm -rf "${dirs[@]}"
 }
 
 #############################################################################
@@ -45,7 +58,7 @@ function findInProjects()
 {
     cd /home/bobb
     for f in $(sudo find support prod -maxdepth 4 -type d -name 'build' | sort); do
-        grep -r "$1" "$f"
+        grep -rE "$1" "$f"
     done
 }
 
