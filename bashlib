@@ -31,31 +31,42 @@ function perlmodver
 #############################################################################
 function rmOldContainers()
 {
+    local -a collection
+
     # remove all containers which are stopped along with their associated volumes
-    local -a containers=()
-    containers+=( $(docker ps --all --quiet --filter "status=exited" --filter "status=dead" --format "{{.Names}}") )
-    containers=( $(printf "%s\n" "${containers[@]}" | uniq ) )
-    [ ${#containers[@]} -eq 0 ] || docker rm --volumes "${containers[@]}"
+    collection=()
+    collection=( $(docker ps --all --quiet --filter "status=exited" --filter "status=dead" --format "{{.Names}}") )
+    if [ ${#collection[@]} -gt 0 ]; then
+        printf "Deleting %d exited containers\n" ${#collection[@]}
+        docker rm --volumes "${collection[@]}"
+    fi
 
     # remove any 'dangling' images  (those with <none> in name)
-    containers=( $(docker images --quiet --filter "dangling=true") )
-    [ ${#containers[@]} -eq 0 ] || docker rmi "${containers[@]}"
-    unset containers
+    collection=( $(docker images --quiet --filter "dangling=true") )
+    if [ ${#collection[@]} -gt 0 ]; then
+        printf "Deleting %d dangling images\n" ${#collection[@]}
+        docker rmi "${collection[@]}"
+    fi
 
     # get list of volumes associated with running containers
-    local -a volumes=()
-    for v in $(docker ps --all --quiet); do
-        volumes+=( $(docker inspect "$v" | jq -r '.[] | .Mounts | .[] | .Name | select(.)') )
+    collection=()
+    for volume in $(docker ps --all --quiet); do
+        collection+=( $(docker inspect "$volume" | jq -r '.[] | .Mounts | .[] | .Name | select(.)') )
     done
+    printf "Detected %d mounts associated with running containers\n" ${#collection[@]}
+    local volumes="$( printf "%s\n" "${collection[@]}" )"
 
     # remove directories associated with unused volumes
-    local -a dirs=()
+    collection=()
     for dir in $(sudo find '/var/lib/docker/volumes/' -mindepth 1 -maxdepth 1 -type d); do
-        (printf "%s\n" "${volumes[@]}" | grep -v "$dir") && continue
-        dirs+=( "$dir" )
+        (grep "$dir" <<< "$volumes") && continue
+        collection+=( "$dir" )
     done
-    sudo rm -rf "${dirs[@]}" 
-    
+    if [ ${#collection[@]} -gt 0 ]; then
+        printf "Deleting %d directories associated with volumes no longer in use\n" ${#collection[@]}
+        sudo rm -rf "${collection[@]}"
+    fi
+
     docker images
 }
 
