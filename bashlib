@@ -31,27 +31,31 @@ function perlmodver
 #############################################################################
 function rmOldContainers()
 {
+    # remove all containers which are stopped along with their associated volumes
     local -a containers=()
-#    containers+=( $(docker ps --all --quiet --filter "status=exited" --filter "name=_" --format "{{.Names}}") )
     containers+=( $(docker ps --all --quiet --filter "status=exited" --filter "status=dead" --format "{{.Names}}") )
     containers=( $(printf "%s\n" "${containers[@]}" | uniq ) )
     [ ${#containers[@]} -eq 0 ] || docker rm --volumes "${containers[@]}"
 
+    # remove any 'dangling' images  (those with <none> in name)
     containers=( $(docker images --quiet --filter "dangling=true") )
     [ ${#containers[@]} -eq 0 ] || docker rmi "${containers[@]}"
     unset containers
 
-    # remove directories associated with unused volumes
+    # get list of volumes associated with running containers
     local -a volumes=()
     for v in $(docker ps --all --quiet); do
         volumes+=( $(docker inspect "$v" | jq -r '.[] | .Mounts | .[] | .Name | select(.)') )
     done
-    local -a dirs=()
-    for v in $(printf "%s\n" "${volumes[@]}" | uniq ); do
-        dirs+=( $(sudo find '/var/lib/docker/volumes/' -mindepth 1 -maxdepth 1 -type d | grep -vFf "$v") )
-    done
-    sudo rm -rf "${dirs[@]}"
 
+    # remove directories associated with unused volumes
+    local -a dirs=()
+    for dir in $(sudo find '/var/lib/docker/volumes/' -mindepth 1 -maxdepth 1 -type d); do
+        (printf "%s\n" "${volumes[@]}" | grep -v "$dir") && continue
+        dirs+=( "$dir" )
+    done
+    sudo rm -rf "${dirs[@]}" 
+    
     docker images
 }
 
