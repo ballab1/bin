@@ -1,6 +1,6 @@
 #!/bin/bash
 
-declare start=$(tfile=$(mktemp); stat -c %Y "$tfile"; rm "$tfile" )
+declare start=$(date +%s)
 export  CONTAINER_TAG="$( date +%Y%m%d )"
 export  CBF_VERSION=dev
 set -o verbose
@@ -33,7 +33,7 @@ docker-compose build kafkamgr
 #docker-compose up -d
 
 set +o verbose
-declare finish=$(tfile=$(mktemp); stat -c %Y "$tfile"; rm "$tfile" )
+declare finish=$(date +%s)
 declare -i elapsed=$(( finish - start ))
 printf "Time elapsed: %02d:%02d:%02d\n"  $((elapsed / 3600)) $((elapsed % 3600 / 60)) $((elapsed % 60)) 
 
