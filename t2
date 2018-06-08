@@ -1,0 +1,9 @@
+#!/bin/bash -v
+
+cd ~/prod
+docker-compose -f ~/prod/dc.yml down
+
+sudo rm ~/prod/vols/log/*/*
+
+cd ~/prod
+docker-compose -f ~/prod/dc.yml up -d
