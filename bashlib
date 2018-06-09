@@ -64,7 +64,9 @@ function rmOldContainers()
     done
     if [ ${#collection[@]} -gt 0 ]; then
         printf "Deleting %d directories associated with volumes no longer in use\n" ${#collection[@]}
-        sudo rm -rf "${collection[@]}"
+        for dir in "${collection[@]}"; do
+            sudo rm -rf "$dir"
+        done
     fi
 
     docker images
