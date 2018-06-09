@@ -1,0 +1,44 @@
+#!/bin/bash
+#############################################################################
+#
+#   rmOldContainers.sh
+#
+#############################################################################
+
+declare -a collection
+
+# remove all containers which are stopped along with their associated volumes
+collection=()
+collection=( $(docker ps --all --quiet --filter "status=exited" --filter "status=dead" --format "{{.Names}}") )
+if [ ${#collection[@]} -gt 0 ]; then
+    printf "Deleting %d exited containers\n" ${#collection[@]}
+    docker rm --volumes "${collection[@]}"
+fi
+
+# remove any 'dangling' images  (those with <none> in name)
+collection=( $(docker images --quiet --filter "dangling=true") )
+if [ ${#collection[@]} -gt 0 ]; then
+    printf "Deleting %d dangling images\n" ${#collection[@]}
+    docker rmi "${collection[@]}"
+fi
+
+# get list of volumes associated with running containers
+collection=()
+for volume in $(docker ps --all --quiet); do
+    collection+=( $(docker inspect "$volume" | jq -r '.[] | .Mounts | .[] | .Name | select(.)') )
+done
+printf "Detected %d mounts associated with running containers\n" ${#collection[@]}
+declare volumes="$( printf "%s\n" "${collection[@]}" )"
+
+# remove directories associated with unused volumes
+declare -i deletions=0
+for dir in $(sudo find '/var/lib/docker/volumes/' -mindepth 1 -maxdepth 1 -type d); do
+    (grep "$dir" <<< "$volumes") && continue
+    sudo rm -rf "$dir"
+    (( deletions++ ))
+done
+if [ $deletions -gt 0 ]; then
+    printf "Deleted %d directories associated with volumes no longer in use\n" $deletions
+fi
+
+docker images
