@@ -1,12 +1,21 @@
-source ~/bin/bashlib
-source ~/bin/git-prompt.sh
 
 alias cbr='cbfRepos'
 alias dc='docker-compose'
-alias dim='dockerImages'
+alias dd='docker-dependents'
+alias de='docker exec -it'
+alias dl='docker logs'
+alias dr='docker run -it --rm --entrypoint '
+alias dt='docker top'
+alias dcs='dockerComposeServices'
+alias dim='docker images'
 alias dnt='dockerNetworks'
 alias dps='dockerProcesses'
+alias env='/usr/bin/env | sort'
+alias fdd='docker-find-dependents'
 alias fip='findInProjects'
+alias gr='git-revision'
 alias rcc='removeCurrentContainers'
+alias rlg='dockerRunLogs'
 alias roc='rmOldContainers'
+alias rp='restartProd'
 

@@ -1,0 +1,32 @@
+#!/bin/bash
+#############################################################################
+#
+#   waitForContainer
+#
+#############################################################################
+
+IFS=$'\n\t'
+
+DIR=prod
+
+declare container line
+declare -A finished=( [mysql]='0' )
+declare -a containers lines
+mapfile -t containers < <( docker network inspect "${DIR}_default" | jq '.[].Containers[].Name' | awk -F '"' '{print $2}')
+while [ ${#finished[*]} -lt ${#containers[*]} ]; do
+    sleep 1
+    lines=()
+    for container in "${containers[@]}"; do
+        [ container == 'mysql' ] && continue
+        declare text="$(docker logs "${container,,}" 2>&1 | grep  "Finished executing startup")"
+        [ -z "$text" ] && continue
+        [ "${finished[${container,,}]:-}" ] && continue
+        finished[${container,,}]="$text"
+        lines+=( "$(sed -Ee 's|^.+Finished executing startup scripts after ||' <<< "$text" | awk -F ':' '{ print ((($1 * 60) + $2) * 60) + $3 }')_${container,,}" )
+    done
+    for line in $(printf "%s\n" "${lines[@]}" | sort -t '_' -k 1n,2); do
+        container="${line##*_}"
+        echo "${finished[${container,,}]}"
+    done
+done
+

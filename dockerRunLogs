@@ -1,7 +1,11 @@
 #!/bin/bash
 #############################################################################
 #
-#   bashlib.sh
+#   dockerLogs
 #
 #############################################################################
 
+IFS=$'\n\t'
+declare -a containers=( $( docker ps -q ) )
+[ -e "run.log" ] && rm "run.log"
+for x in "${containers[@]}"; do docker logs "$x"; done | tee run.log

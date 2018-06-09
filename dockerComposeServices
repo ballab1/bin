@@ -1,0 +1,13 @@
+#!/bin/bash
+#############################################################################
+#
+#   dockerComposeServices
+#
+#############################################################################
+
+declare yaml=${1:-docker-compose.yml}
+if [ -e "$yaml" ]; then
+     docker-compose -f "$yaml" config | grep -vE 'services|version' | awk '{ if (substr($0,3,1) != " ") {print substr($1,0,length($1)-1)}}' | sed '$d'
+else
+    echo "Unable to locate $yaml"
+fi

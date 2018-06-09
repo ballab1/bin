@@ -115,3 +115,9 @@ if ! shopt -oq posix; then
     . /etc/bash_completion
   fi
 fi
+
+[ -e ~/bin/bashlib ] && source ~/bin/bashlib
+[ -e ~/bin/git-prompt.sh ] && source ~/bin/git-prompt.sh
+[ -e ~/.inf/docker.inf ] && source ~/.inf/docker.inf
+[ -e ~/bin/bash_variables ] && source ~/bin/bash_variables
+
