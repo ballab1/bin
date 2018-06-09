@@ -20,7 +20,7 @@ while [ ${#finished[*]} -lt ${#containers[*]} ]; do
     for container in "${containers[@]}"; do
         declare text="$(docker logs "${container,,}" 2>&1 | grep  "${container^^}: Finished executing startup")"
         [ -z "$text" ] && continue
-        grep "$text" <<< "$(printf "%s\n" "${finished[@]}")" && continue
+        (grep "$text" <<< "$(printf "%s\n" "${finished[@]}")") && continue
         finished+=( "$text" )
         echo "$text"
     done
