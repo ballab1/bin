@@ -14,4 +14,5 @@ alias env='/usr/bin/env | sort'
 alias fip='findInProjects'
 alias rcc='removeCurrentContainers'
 alias roc='rmOldContainers'
+alias rp='restartProd'
 
