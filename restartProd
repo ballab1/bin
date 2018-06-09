@@ -13,15 +13,15 @@ sudo find -L vols/log -type f ! -name '.*' -delete
 docker-compose up -d
 set +o verbose
 
-declare -a finished=()
+declare -A finished=()
 declare -a containers=( $(docker ps --format '{{.Names}}' | grep -v 'mysql') )
 while [ ${#finished[*]} -lt ${#containers[*]} ]; do
     sleep 5
     for container in "${containers[@]}"; do
-        declare text="$(docker logs "${container,,}" 2>&1 | grep  "${container^^}: Finished executing startup")"
+        declare text="$(docker logs "${container,,}" 2>&1 | grep  "Finished executing startup")"
         [ -z "$text" ] && continue
-        (grep "$text" <<< "$(printf "%s\n" "${finished[@]}")") && continue
-        finished+=( "$text" )
+        [ "${finished[${container,,}]:-}" ] && continue
+        finished[${container,,}]="$text"
         echo "$text"
     done
 done
