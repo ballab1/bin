@@ -1,0 +1,8 @@
+#!/bin/bash
+#############################################################################
+#
+#   dockerNetworks
+#
+#############################################################################
+
+docker network inspect $( docker network ls | grep 'default' | awk "{ print \$1 }") | jq ".[].Containers|.[]|[.IPv4Address + \" : \" + .Name]|.[]" | sort -t "." -k 4g

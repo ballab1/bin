@@ -3,7 +3,9 @@ source ~/bin/git-prompt.sh
 
 alias cbr='cbfRepos'
 alias dc='docker-compose'
-alias dim='dockerImages'
+alias dl='docker logs'
+alias dcs='dockerComposeServices'
+alias dim='docker images'
 alias dnt='dockerNetworks'
 alias dps='dockerProcesses'
 alias fip='findInProjects'

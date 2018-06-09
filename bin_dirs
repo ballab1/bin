@@ -1,0 +1,12 @@
+#!/bin/bash
+
+clear
+
+declare -ra dirlist=( '/home/bobb/bin' '/home/bobb/.jenkins' '/home/bobb/.nano' )
+    
+for dir in "${dirlist[@]}"; do
+    mkdir -p "$dir"
+    chmod -R 777 "$dir"
+    declare -a files=( $( ls "$dir"/* 2> /dev/null ) )
+    [ ${#files[@]} -eq 0 ] || chmod 755 "${files[*]}"
+done
