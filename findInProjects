@@ -6,6 +6,6 @@
 #############################################################################
 
 cd /home/bobb
-or f in $(sudo find support prod -maxdepth 4 -type d -name 'build' | sort); do
+for f in $(sudo find support prod -maxdepth 4 -type d -name 'build' | sort); do
     grep -rE "$1" "$f"
 done

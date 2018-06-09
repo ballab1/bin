@@ -1,11 +1,11 @@
 #!/bin/bash -v
 
 cd ~/prod
-docker-compose -f ~/prod/dc.yml down
+docker-compose down
 
 sudo find -L vols/log -type f ! -name '.*' -delete
 
 cd ~/prod
-docker-compose -f ~/prod/dc.yml up -d
+docker-compose up -d
 
 sudo find -L vols/log -type f ! -name '.*' -exec chmod 666 '{}' \;
