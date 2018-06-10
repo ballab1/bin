@@ -1,0 +1,14 @@
+#!/bin/bash
+#############################################################################
+#
+#   waitForContainer
+#
+#############################################################################
+
+declare container=${1:?}
+
+while [ -z "$(docker logs "${container,,}" 2>&1 | grep "${container^^}: Finished executing startup")" ]; do 
+    sleep 20
+done
+
+echo "$(docker logs "${container,,}" 2>&1 | grep  "${container^^}: Finished executing startup")"

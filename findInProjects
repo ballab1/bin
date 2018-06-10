@@ -1,7 +1,11 @@
 #!/bin/bash
 #############################################################################
 #
-#   bashlib.sh
+#   findInProjects
 #
 #############################################################################
 
+cd /home/bobb
+for f in $(sudo find support prod -maxdepth 4 -type d -name 'build' | sort); do
+    grep -rE "$1" "$f"
+done

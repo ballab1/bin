@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# Use the Unofficial Bash Strict Mode
+set -o errexit
+set -o nounset
+set -o pipefail
+IFS=$'\n\t'
+
+set -o verbose
+cd ~/prod
+docker-compose down
+sudo find -L vols/log -type f ! -name '.*' -delete
+docker-compose up -d
+set +o verbose
+
+declare -A finished=()
+declare -a containers=( $(docker ps --format '{{.Names}}' | grep -v 'mysql') )
+while [ ${#finished[*]} -lt ${#containers[*]} ]; do
+    sleep 5
+    for container in "${containers[@]}"; do
+        declare text="$(docker logs "${container,,}" 2>&1 | grep  "Finished executing startup")"
+        [ -z "$text" ] && continue
+        [ "${finished[${container,,}]:-}" ] && continue
+        finished[${container,,}]="$text"
+        echo "$text"
+    done
+done
