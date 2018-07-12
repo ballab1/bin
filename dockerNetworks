@@ -6,7 +6,7 @@
 #############################################################################
 
 IFS=$'\n\t'
-declare -a networks=( $( docker network ls | grep 'default' | awk "{ print \$1 }" ) ) \
+declare -a networks=( $( docker network ls | grep 'default' | awk "{ print \$1 }" ) )
 networks=( $(docker network inspect "${networks[@]}" | \
                       jq ".[].Containers|.[]|[.IPv4Address + \" : \" + .Name]|.[]" | \
                       sort -t "." -k 4g) )

@@ -1,0 +1,30 @@
+# must update network config to connect initially
+#
+cat << EOF > /etc/netplan/01-netcfg.yaml
+network:
+    version: 2
+    renderer: networkd
+    ethernets:
+        eno1:
+            addresses: [10.1.3.10/24]
+            gateway4: 10.1.3.1
+            nameservers:
+                addresses: [75.75.75.75,75.75.75.76]
+            dhcp4: no
+            optional: true
+EOF
+
+
+apt-get update
+apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+
+git clone https://github.com/ballab1/bin.git /home/bobb/bin
+chown -R bobb:bobb /home/bobb/bin
+
+/home/bobb/bin/setupSystem
+
+# update
+#   timescaledb
+#   mysql
+# Jenkins: ## setting up the SCM-Configuration Plugin
+this uses SSH, so an ssh key (~/.ssh/id_rsa.pub) has to be present. This has to be uploaded to GITHub for the account used to save the configuration

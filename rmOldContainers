@@ -6,6 +6,7 @@
 #############################################################################
 
 declare -a collection
+declare -i blocksUsedBefore="$(df /var/lib/docker/volumes | awk '{if (NR==2) {print $3}}')"
 
 # remove all containers which are stopped along with their associated volumes
 collection=()
@@ -37,8 +38,10 @@ for dir in $(sudo find '/var/lib/docker/volumes/' -mindepth 1 -maxdepth 1 -type 
     sudo rm -rf "$dir"
     (( deletions++ ))
 done
-if [ $deletions -gt 0 ]; then
-    printf "Deleted %d directories associated with volumes no longer in use\n" $deletions
-fi
+[ $deletions -gt 0 ] && printf "Deleted %d directories associated with volumes no longer in use\n" $deletions
+
+declare -i blocksUsedAfter="$(df /var/lib/docker/volumes | awk '{if (NR==2) {print $3}}')"
+printf "Recovered %d kb\n" $(( blocksUsedBefore - blocksUsedAfter ))
+echo
 
 docker images

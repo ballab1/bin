@@ -1,11 +1,11 @@
 #!/bin/bash
 #############################################################################
 #
-#   findInProjects
+#   dockerLogs
 #
 #############################################################################
 
-cd /home/bobb
-for f in $(sudo find support -maxdepth 4 -type d -name 'build' | sort); do
-    grep -nrE "$1" "$f"
-done
+IFS=$'\n\t'
+declare -a containers=( $( docker ps -q ) )
+[ -e "run.log" ] && rm "run.log"
+for x in "${containers[@]}"; do docker logs "$x"; done | tee run.log

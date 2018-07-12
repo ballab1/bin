@@ -1,0 +1,165 @@
+#!/bin/bash
+
+function requiredPackages() {
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+    apt-key fingerprint 0EBFCD88
+    #add-apt-repository  "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    add-apt-repository  "deb [arch=amd64] https://download.docker.com/linux/ubuntu zesty stable"
+
+    curl -fsSL http://www.webmin.com/jcameron-key.asc | apt-key add -
+    apt-key fingerprint 11F63C51
+    add-apt-repository  'deb http://download.webmin.com/download/repository sarge contrib'
+
+    apt-get update
+    apt-get install -y build-essential docker-ce docker-compose jq libxml2 libxml2-dev nfs-common nfs-kernel-server openjdk-8-jre-headless tasksel webmin
+
+    tasksel install samba-server
+}
+
+function updatePerlSupport() {
+    echo 'Adding needed PERL modules'
+    cpan -i XML::LibXML
+}
+
+function redirectOwnBashFiles() {
+    echo 'Redirect own BASH files'
+    [ -e ~/.bash_aliases ] && rm ~/.bash_aliases
+    ln -s ~/bin/bash_aliases ~/.bash_aliases
+    [ -e ~/.bash_logout ] && rm ~/.bash_logout
+    ln -s ~/bin/bash_logout ~/.bash_logout
+    [ -e ~/.bashrc ] && rm ~/.bashrc
+    ln -s ~/bin/bashrc ~/.bashrc
+}
+
+function saveDefaultDockerCompose() {
+    [ ! -h "$(which docker-compose)" ] || return
+    echo 'Saving default docker-compose'
+    local -r DC_COMPOSE_VER=$(docker-compose --version | awk '{ print substr($3,0,length($3)-1)}')
+    mv "$(which docker-compose)"  "/usr/local/bin/docker-compose.$DC_COMPOSE_VER"
+    [ -e /usr/bin/docker-compose ] && rm /usr/bin/docker-compose
+}
+
+function getLatestDockerCompose() {
+    saveDefaultDockerCompose
+    echo 'Downloading latest docker-compose'
+    local -r DC_COMPOSE_VER=1.21.2
+    curl -L "https://github.com/docker/compose/releases/download/${DC_COMPOSE_VER}/docker-compose-$(uname -s)-$(uname -m)" -o "/usr/local/bin/docker-compose.$DC_COMPOSE_VER"
+    chmod 755 "/usr/local/bin/docker-compose.$DC_COMPOSE_VER"
+    ln -s "/usr/local/bin/docker-compose.$DC_COMPOSE_VER" /usr/bin/docker-compose
+}
+
+function exposeDockerRestAPI() {
+    echo 'Exposing docker REST API'
+    sed -iE 's|^ExecStart=/usr/bin/dockerd.*$|ExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:4243|' /lib/systemd/system/docker.service
+    systemctl daemon-reload
+    systemctl restart docker
+}
+
+function installGitLFS() {
+    curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
+    sudo apt-get install git-lfs
+    git lfs install
+}
+
+function updateHosts() {
+    echo 'Updating /etc/hosts'
+    cat << EOF >> /etc/hosts
+10.1.3.1        router
+10.1.3.5        wdmycloud
+10.1.3.6        ubuntu-s3
+10.1.3.10       ubuntu-s4
+10.1.3.11       ubuntu-s1
+10.1.3.12       ubuntu-s2
+192.168.100.1   cable-modem
+EOF
+}
+
+function networkMounts() {
+    echo 'Setting up mounts for network shares'
+    [ -d /mnt/WDMyCloud ] || mkdir -p /mnt/WDMyCloud
+    [ -d /mnt/Seagate ] || mkdir -p /mnt/Seagate
+    [ -d /mnt/Guest ] || mkdir -p /mnt/Guest
+    [ -d /home/bobb/src ] || mkdir -p /home/bobb/src
+    [ -d /home/bobb/xsrc ] || mkdir -p /home/bobb/xsrc
+
+cat << EOF >> /etc/fstab
+#
+10.1.3.5:/nfs /mnt/WDMyCloud nfs
+//10.1.3.1/Seagate /mnt/Seagate cifs credentials=/home/bobb/.inf/10.1.3.1.smb
+//10.1.3.5/Guest /mnt/Guest cifs credentials=/home/bobb/.inf/10.1.3.5.smb
+#
+/mnt/Guest/ubuntu /home/bobb/src        none    bind
+/mnt/Seagate/ubuntu /home/bobb/xsrc     none    bind
+EOF
+    mount -a
+}
+
+function createSecrets() {
+    echo 'creating secrets'
+    [ -d ~/.inf ] || mkdir -p ~/.inf 
+    cat << EOF >> ~/.inf/docker.inf
+export CFG_GITHUB_JENKINS_TOKEN='00................................992915'
+export CFG_GITHUB_HUBOT_TOKEN='30a................................6bdd9'
+export CFG_GITHUB_JENKINS_USER=ballab1
+export CFG_GITHUB_JENKINS_NAME="Bob Ballantyne"
+export CFG_GITHUB_JENKINS_EMAIL=bob.ballantyne@emc.com
+export CFG_SLACK_HUBOT_TOKEN=''
+export CFG_MYSQL_ROOT_PASSWORD=1.......y
+export CFG_MYSQL_USER=bobb
+export CFG_MYSQL_PASSWORD=1.......y
+
+EOF
+
+}
+
+function updateUsersAndGroups() {
+    echo 'Updating users and groups'
+    #createUserAndGroup mysql    999 mysql    999 '--no-create-home' /sbin/nologin
+    #createUserAndGroup docker   999 docker   999 '--no-create-home' /sbin/nologin
+    #createUserAndGroup nginx   1001 nginx   1001 '--no-create-home' /sbin/nologin
+    #createUserAndGroup nagios  1002 nagios  1002 '--no-create-home' /sbin/nologin
+    #createUserAndGroup jenkins 1003 jenkins 1003 '--no-create-home' /sbin/nologin
+    #createUserAndGroup webdav  2222 webdav  2222 '--no-create-home' /sbin/nologin
+    #usermod  -u 82 www-data
+    #groupmod -g 82 www-data
+    #usermod -G docker,jenkins,nginx,nagios,www-data,webdav bobb
+    #chown jenkins:jenkins -R /home/bobb/prod/jenkins/vols/jenkins_home
+}
+
+function other() {
+    echo 'other'
+    # set environment vars for passwrds etc
+    # set .ssh for keyless login
+    # set correct ssh for Jenkins access to GITHUB to update config
+    # modify ownership of prod/jenkins/container/.ssh to be jenkins:jenkins
+    # modify /etc/sudoers.d/myOverrides to permit NOPASSWD access by bobb
+    # update '.ssh/known_hosts' on all systems
+
+    # need in Jenkins job:  DBMS-backup  { https://10.1.3.6/jenkins/job/DBMS-backup/ }
+    #cp *.sql ~/prod/mysql/vols/loader/dumps/
+}
+
+
+##################################################################################################
+
+if [ "$EUID" != 0 ]; then
+    sudo --preserve-env --set-home $0
+    exit 0
+fi
+
+. /home/bobb/bin/bashlib
+set -v
+export PATH=~/bin:$PATH
+
+updatePerlSupport
+installGitLFS
+redirectOwnBashFiles
+getLatestDockerCompose
+exposeDockerRestAPI
+updateHosts
+createSecrets
+networkMounts
+updateUsersAndGroups
+other
+
+
