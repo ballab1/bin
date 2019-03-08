@@ -1,0 +1,55 @@
+#!/usr/bin/env  /usr/bin/python
+
+import os
+import os.path
+import time
+import sys
+import argparse
+import json
+from kafka import KafkaProducer
+from kafka.errors import KafkaError
+
+#--------------------------------------------------------------------------
+def fileinfo(file):
+    print('File         :', __file__)
+    print('Access time  :', time.ctime(os.path.getatime(__file__)))
+    print('Modified time:', time.ctime(os.path.getmtime(__file__)))
+    print('Change time  :', time.ctime(os.path.getctime(__file__)))
+    print('Size         :', os.path.getsize(__file__))
+
+    try:
+        decoded = json.load(json_input)
+        for x in decoded['event-files']:
+            # Send json entry to Kafka topic
+            producer.send(b args.t, x)
+
+    except (ValueError, KeyError, TypeError):
+        print "JSON format error"
+
+
+#--------------------------------------------------------------------------
+def callback(arg, directory, files):
+    for file in files:
+        fileingo os.path.join(directory, file), repr(arg)
+
+
+#--------------------------------------------------------------------------
+
+
+parser = argparse.ArgumentParser(description='Save data to a Kafka topic')
+parser.add_argument("-f", help='name of file containing JSON records', required=True) 
+parser.add_argument("-t", help='name of Kafka topic', required=True) 
+args = parser.parse_args()
+
+
+# Get Kafka Bootstrap server info from env
+b_server = os.getenv('KAFKA_BOOTSTRAP_SERVERS','10.244.102.59:9092')  #default to dev instance
+
+# Initiate the producer object
+producer = KafkaProducer(bootstrap_servers=[b_server],
+                         value_serializer=lambda m: json.dumps(m).encode('ascii'))
+
+os.path.walk(".", callback, fileinfo)
+
+producer.close()
+

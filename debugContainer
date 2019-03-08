@@ -1,0 +1,21 @@
+#!/bin/bash
+
+declare container="${1:?}"
+
+if [ -z "$(docker ps --all | grep "$container" ||:)" ]; then
+    echo "unable to find container: $container"
+    exit 1
+fi
+
+declare id="$(docker ps -a | grep "$container" | awk '{print $1}')"
+declare status="$(docker ps -a --filter "id=$id" --format '{{.Status}}')"
+
+[[ "$status" = Exited* ]] || [[ "$status" = Dead* ]] || echo "Container $id is still running"
+
+[ -z $(docker images | grep x:tmp ||:) ] || docker rmp x:tmp
+
+docker commit "$id" x:tmp
+docker run -it --rm --entrypoint bash x:tmp
+
+echo 'Removing temporary image used for debug'
+docker rmi x:tmp

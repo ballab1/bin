@@ -1,0 +1,5 @@
+#!/bin/bash
+
+declare -r credentials=$(< ~/.inf/secrets/credentials.github)
+curl -s -k -u "$credentials" -X GET https://api.github.com/repos/ballab1/container_build_framework/tags
+curl -s -k -u "$credentials" -X GET https://api.github.com/repos/ballab1/container_build_framework/branches

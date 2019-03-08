@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# do nothing when we are not in a GIT directory
+if [ $(git rev-parse --is-inside-work-tree) != 'true' ]; then
+    echo 'this is not a GIT directory'
+    exit 0
+fi
+
+# do nothing when tree is clean 
+[ "$(git diff HEAD)" ] || [ "$(git status --porcelain)" ] || exit 0
+
+declare commit="${1:-$(git rev-parse HEAD~1)}"
+declare message="${2:-$(git log -1 --format=%s)}"
+set -v
+
+# merge content into specified commmit of current branch
+git add -A
+git commit -m ';'
+git reset --soft "$commit"
+git commit -m "$message"
+git push -f

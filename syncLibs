@@ -1,0 +1,119 @@
+#!/bin/bash
+
+# Use the Unofficial Bash Strict Mode
+set -o errexit
+set -o nounset
+set -o pipefail
+IFS=$'\n\t'
+
+export HOME=/home/bobb
+export sup_files=${HOME}/GIT/support
+export prd_dir=${HOME}/production
+export prd_files=${prd_dir}/libs
+export lib_files=${sup_files}/libs
+export cbf_files=${sup_files}/container_build_framework/cbf/bashlib
+export bld_files=${sup_files}/build_container/build/usr/local/crf/bashlib
+export bin_files=${sup_files}/build_container/build/usr/local/bin
+export grd_files=${sup_files}/gradle/build/usr/local/crf/bashlib
+
+
+function die()
+{
+    local status=$?
+    [[ $status -ne 0 ]] || status=255
+
+    local args="$*"
+    [ "${args:0:8}" = '***ERROR' ] || args="***ERROR: $args"
+    ( echo
+      printf "\x1b[31m%s\x1b[0m\n" "$args"
+      echo
+      ) >&2
+    exit $status
+}
+
+function remoteSync()
+{
+    local -r host=${1:?}
+
+    if [ "$host" != 'ubuntu-s2' ]; then
+        pushd "$prd_files"
+        scp -r ubuntu-s4:${cbf_files}/* .
+        scp -r ubuntu-s4:${bld_files}/* .
+        scp ubuntu-s4:${bin_files}/deploy .
+        popd
+    fi
+
+    pushd ~/bin
+    git reset --hard HEAD~1
+    git pull
+    popd
+}
+
+function syncLocal()
+{
+    local -r src=${1:?}
+    local -r dst=${2:?}
+    local -r oneWay=${3:-}
+
+    [ -d "$src" ] || die "directory '$src' does not exist"
+    [ -d "$dst" ] || die "directory '$dst' does not exist"
+
+    for f in $(ls "$src"); do
+        [ "$f" != 'properties' ] || continue
+        if [ "${oneWay:-}" ]; then
+            [ ! -d "$f" ] && [ -x "$f" ] || continue
+        fi
+
+        local name="${dst}/$f"
+        sha2=$(sha256sum "$name" | cut -d' ' -f1)
+
+        f="${src}/$f"
+        sha1=$(sha256sum "$f" | cut -d' ' -f1)
+        [ "$sha1" != "$sha2" ] || continue
+
+        if [ "$f" -nt "$name" ]; then
+            echo "cp '$f' '$name'"
+            cp "$f" "$name"
+        elif [ "${oneWay:-}" ]; then
+            continue
+        elif [ "$name" -nt "$f" ]; then
+            echo "cp '$name' '$f'"
+            cp "$name" "$f"
+        fi
+    done
+}
+
+function syncRemote()
+{
+    local -r host=${1:?}
+
+    if [ "$host" != 'ubuntu-s2' ]; then
+        pushd "$prd_files"
+        scp -r ${cbf_files}/* ${host}:${prd_files}
+        scp -r ${bld_files}/* ${host}:${prd_files}
+        scp ${bin_files}/deploy ${host}:${prd_dir}
+        popd
+    fi
+
+    ssh "$host" 'cd "${HOME}/bin"; git reset --hard HEAD~1 ; git pull;'
+}
+
+function localSync()
+{
+    syncLocal "$bld_files" "$lib_files"
+    syncLocal "$bld_files" "$grd_files"
+    syncLocal "$bld_files" "$lib_files"
+    syncLocal "$cbf_files" "$lib_files"
+    syncLocal "$sup_files" "$bin_files" 'oneWay'
+    syncRemote 'ubuntu-s3'
+    syncRemote 'ubuntu-s2'
+    syncRemote 'ubuntu-s1'
+}
+
+
+declare host=$(hostname)
+if [ "$host" = 'ubuntu-s4' ]; then
+   localSync
+else
+   remoteSync "$host"
+fi

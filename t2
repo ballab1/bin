@@ -1,0 +1,50 @@
+#!/bin/bash
+
+
+declare -A IMAGES NAMED_IMAGES
+declare -i start finish elapsed
+
+function test1()
+{
+    # Populate the image info hash
+    IMAGES=()
+    eval "IMAGES=( $(docker images --all --format '[{{.ID}}]="{{.Repository}}:{{.Tag}}"' --no-trunc) )"
+
+    # Populate the named image info hash
+    NAMED_IMAGES=()
+    eval "NAMED_IMAGES=( $(docker images --format '[{{.ID}}]="{{.Repository}}:{{.Tag}}"' --no-trunc) )"
+}
+
+function test2()
+{
+    # Populate the image info hash
+    IMAGES=()
+    eval "IMAGES=( $(docker images --all --format '[{{.ID}}]="{{.Repository}}:{{.Tag}}"' --no-trunc) )"
+
+    # Populate the named image info hash
+    NAMED_IMAGES=()
+    for id in "${!IMAGES[@]}"; do
+        image="${IMAGES[$id]}"
+        [ "$image" = '<none>:<none>' ] || NAMED_IMAGES[$id]="$image"
+    done
+}
+
+start=$(date +%s)
+for i in {1..1000}; do test1 ; done
+finish=$(date +%s)
+elapsed=$(( finish - start ))
+printf '\ntest1 Time: %02d:%02d:%02d\n'  $((elapsed / 3600)) $((elapsed % 3600 / 60)) $((elapsed % 60))
+
+start=$(date +%s)
+for i in {1..1000};do test2 ; done
+finish=$(date +%s)
+elapsed=$(( finish - start ))
+printf '\ntest2 Time: %02d:%02d:%02d\n'  $((elapsed / 3600)) $((elapsed % 3600 / 60)) $((elapsed % 60))
+
+exit 0
+
+echo "UID:  $UID"
+echo "EUID:  $EUID"
+echo "USER:  $USER"
+echo "USERNAME:  $USERNAME"
+echo $(getent passwd bobb | awk -F ':' '{print $3 ":" $4}')

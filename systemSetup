@@ -1,0 +1,184 @@
+#!/bin/bash
+
+declare -r DC_COMPOSE_VER=1.23.1
+
+function exposeDockerRestAPI() {
+    echo 'Exposing docker REST API'
+    sed -iE 's|^ExecStart=/usr/bin/dockerd.*$|ExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:4243|' /lib/systemd/system/docker.service
+    systemctl daemon-reload
+    systemctl restart docker
+}
+
+function getLatestDockerCompose() {
+    echo 'get the latest Docker-compose'
+    saveDefaultDockerCompose || return 0; 
+    echo 'Downloading latest docker-compose'
+    curl -L "https://github.com/docker/compose/releases/download/${DC_COMPOSE_VER}/docker-compose-$(uname -s)-$(uname -m)" -o "/usr/local/bin/docker-compose.$DC_COMPOSE_VER"
+    chmod 755 "/usr/local/bin/docker-compose.$DC_COMPOSE_VER"
+    ln -s "/usr/local/bin/docker-compose.$DC_COMPOSE_VER" /usr/bin/docker-compose
+}
+
+function installGitLFS() {
+    echo 'install Git-LFS support'
+    curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
+    sudo apt-get install git-lfs
+    git lfs install
+}
+
+
+function networkMounts() {
+    echo 'Setting up mounts for network shares'
+    [ -d /mnt/WDMyCloud ] || mkdir -p /mnt/WDMyCloud
+    [ -d /mnt/Seagate ] || mkdir -p /mnt/Seagate
+    [ -d /mnt/Guest ] || mkdir -p /mnt/Guest
+    [ -d /home/bobb/src ] || mkdir -p /home/bobb/src
+    [ -d /home/bobb/xsrc ] || mkdir -p /home/bobb/xsrc
+
+cat << EOF >> /etc/fstab
+#
+10.1.3.5:/nfs /mnt/WDMyCloud nfs
+//10.1.3.5/WDMyCloud/Seagate_Expansion_Drive /mnt/Seagate cifs credentials=/home/bobb/.inf/10.1.3.1.smb
+//10.1.3.5/Guest /mnt/Guest cifs credentials=/home/bobb/.inf/10.1.3.5.smb
+#
+/mnt/Guest/ubuntu /home/bobb/src        none    bind
+/mnt/Seagate/ubuntu /home/bobb/xsrc     none    bind
+EOF
+    mount -a
+}
+
+function other() {
+    echo 'other'
+    cat << EOF
+    # set environment vars for passwrds etc
+    # set .ssh for keyless login
+    # set correct ssh for Jenkins access to GITHUB to update config
+    # modify /etc/sudoers.d/myOverrides to permit NOPASSWD access by bobb
+    # update '.ssh/known_hosts' on all systems
+
+    # install enterprise for GIT
+    # install ~/GIT folders  (
+    # add       /usr/local/bin/git-crypt
+    # update samba config
+    # tasksel install samba-server
+EOF
+}
+
+
+function mkdirJenkinsSlaveFolders() {
+    echo 'maked directories for Jenkins Slaves'
+    mkdir -p /home/jenkins-s3
+    mkdir -p /home/jenkins-s4
+    chown bobb:bobb /home/jenkins-s3 /home/jenkins-s4
+}
+
+function redirectOwnBashFiles() {
+    echo 'Redirect own BASH files'
+    [ -e ~/.bash_aliases ] && rm ~/.bash_aliases
+    ln -s ~/bin/bash_aliases ~/.bash_aliases
+    [ -e ~/.bash_logout ] && rm ~/.bash_logout
+    ln -s ~/bin/bash_logout ~/.bash_logout
+    [ -e ~/.bashrc ] && rm ~/.bashrc
+    ln -s ~/bin/bashrc ~/.bashrc
+}
+
+function requiredPackages() {
+    add-apt-repository universe
+    apt-get update
+    apt-get install -y build-essential nfs-common nfs-kernel-server tasksel libxml2 libxml2-dev
+    apt-get install -y python-pip openjdk-8-jre-headless cifs-utils
+    apt-get install -y librdkafka++1 librdkafka1 python-confluent-kafka
+    apt-get install -y docker-compose jq webmin
+}
+
+function saveDefaultDockerCompose() {
+    local -r compose="$(which docker-compose)"
+    [ "$compose" ] || return 0
+    local -r dc_compose_ver=$(docker-compose --version | awk '{ print substr($3,0,length($3)-1)}')
+    [ "$DC_COMPOSE_VER" = "$dc_compose_ver" ] && return 1
+
+    if [ ! -h "$compose" ]; then
+        echo 'Saving default docker-compose'
+        [ -e "/usr/local/bin/docker-compose.$dc_compose_ver" ] || mv "$compose" "/usr/local/bin/docker-compose.$dc_compose_ver"
+    fi
+    [ ! -e /usr/bin/docker-compose ] || rm /usr/bin/docker-compose
+}
+
+function setupRegistryAccess() {
+    echo '{ "insecure-registries":["ubuntu-s2:5000"] }' > /etc/docker/daemon.json
+    systemctl restart docker
+}
+
+function updateHosts() {
+    echo 'Updating /etc/hosts'
+    cat << EOF >> /etc/hosts
+10.1.3.1        router
+10.1.3.5        wdmycloud
+10.1.3.11       ubuntu-s1
+10.1.3.12       ubuntu-s2
+10.1.3.6        ubuntu-s3
+10.1.3.10       ubuntu-s4
+192.168.100.1   cable-modem
+EOF
+}
+
+function updatePerlSupport() {
+    echo 'Adding needed PERL modules'
+    cpan -i XML::LibXML
+}
+
+function updateUsersAndGroups() {
+    echo 'Updating users and groups'
+
+    usermod  -u 82 www-data
+    groupmod -g 82 www-data
+    groupadd --gid  999 mysql
+
+    groupadd --gid 1001 nginx
+    useradd --no-create-home --gid 1001 --uid 1001 --shell /sbin/nologin nginx  
+
+    groupadd --gid 1002 nagios
+    useradd --no-create-home --gid 1002 --uid 1002 --shell /sbin/nologin nagios 
+
+    groupadd --gid 1003 jenkins
+    useradd --no-create-home --gid 1003 --uid 1003 --shell /sbin/nologin jenkins
+
+    groupadd --gid 2222 webdav
+    useradd --no-create-home --gid 2222 --uid 2222 --shell /sbin/nologin webdav 
+
+    usermod -G docker,jenkins,nginx,nagios,www-data,webdav bobb
+}
+
+usage() {
+    echo
+    echo "$0 -  available functions:"
+    local -a methods
+    mapfile -t methods < <( grep -R '^function' ~/bin/systemSetup | sort | sed -r 's|function (.+)\s*\(.+$|\1|' )
+    printf '    %s\n' "${methods[@]}"
+    echo
+}
+
+##################################################################################################
+
+
+# Use the Unofficial Bash Strict Mode
+set -o errexit
+set -o nounset
+set -o pipefail
+IFS=$'\n\t'
+[ ! -e ~/bin/trap.bashlib ] || source ~/bin/trap.bashlib
+
+export PATH=~/bin:$PATH
+
+
+if [ $# -eq 0 ]; then
+    usage
+
+else
+    for arg in "$@"; do
+        if [ "$arg" = 'redirectOwnBashFiles' ] || [ $EUID -eq 0 ]; then
+            "$arg"
+        else
+            sudo --preserve-env --set-home $0 "$arg"
+        fi
+    done
+fi

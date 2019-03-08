@@ -1,0 +1,32 @@
+# Created by .gitignore support plugin (hsz.mobi)
+.idea
+*.iml
+*.tgz
+*.zip
+**/*.bak
+*.log
+
+# OSX
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Linux
+*~
+.directory
+.Trash-*
+vols/*
+vols-rw/*
+build/container_build_framework*
+cbf/CRF.properties
+CBF.properties
+scanned.paths
+*.loaded
+
+PluginUpdator/*.txt
+PluginUpdator/Dockerfile*
+PluginUpdator/01.JENKINS*
+test/*.txt
+.groovy
+**/*.class
+docker-find-dependents
