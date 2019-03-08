@@ -1,0 +1,11 @@
+#!/bin/bash
+#############################################################################
+#
+#   findInProjects
+#
+#############################################################################
+
+cd /home/bobb/GIT
+for f in $(sudo find support -maxdepth 4 -type d -name 'build' | sort); do
+    grep -nrE "$1" "$f"
+done

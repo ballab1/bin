@@ -1,0 +1,28 @@
+#!/bin/bash -x
+
+# Use the Unofficial Bash Strict Mode
+set -o errexit
+set -o nounset
+set -o pipefail
+IFS=$'\n\t'
+
+
+function t1() {
+    local -r arg=${1:?}
+    t2 "$arg."
+}
+function t2() {
+    local -r arg=${1:?}
+    t3 "$arg."
+}
+function t3() {
+    local -r arg=${1:?}
+    t4 "$arg."
+}
+function t4() {
+    local -r arg=${1:?}
+    echo "$arg"
+}
+
+
+t1 'Hi'

@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# ensure this script is run as root
+if [[ $EUID != 0 ]]; then
+  sudo --preserve-env $0
+  exit
+fi
+
+declare version=1.22.0
+
+curl  --location https://github.com/docker/compose/releases/download/${version}/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose.${version}
+chmod 755 /usr/local/bin/docker-compose.${version}
+rm /usr/bin/docker-compose
+ln -s /usr/local/bin/docker-compose.${version} /usr/bin/docker-compose

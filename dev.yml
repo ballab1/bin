@@ -1,0 +1,37 @@
+version: '3.3'
+
+services:
+    dev:
+        env_file: ~/.dev.vars
+        environment:
+            KAFKA_BOOTSTRAP_SERVERS: "$KAFKA_BOOTSTRAP_SERVERS"
+            ALWAYS_BUILD: "${ALWAYS_BUILD:-}"
+            BASE_TAG: "${BASE_TAG:-latest}"
+            CONTAINER_OS: "${CONTAINER_OS:-}"
+            DOCKER_ALWAYS_PUSH: "${DOCKER_ALWAYS_PUSH:-}"
+            CRYPT_FILE: /run/secrets/.crypt-key
+        extra_hosts:
+            - "ubuntu-s1:10.1.3.11"
+            - "ubuntu-s2:10.1.3.12"
+            - "ubuntu-s3:10.1.3.6"
+            - "ubuntu-s4:10.1.3.10" 
+        hostname: dev
+        image: ${DOCKER_REGISTRY:-ubuntu-s2:5000/}${CONTAINER_OS:-alpine}/build_container:${CONTAINER_TAG:-latest}
+        logging:
+            driver: json-file
+            options:
+                max-file: "3"
+                max-size: "10m"
+        secrets:
+            - .crypt-key
+        tty: false
+        volumes:
+            - /var/lib/docker:/var/lib/docker
+            - /var/run/docker.sock:/var/run/docker.sock
+            - ~/:/home/builder
+            - $PWD:/opt
+        working_dir: /opt
+
+secrets:
+   .crypt-key:
+     file: ~/.crypt-key 
