@@ -1,12 +1,10 @@
 #!/bin/bash
 
 function resetHistory() {
-    local -a tags=( $(git tag --list) )
-
     echo
     echo $dir
 
-    for tag in "${tags[@]}"; do
+    for tag in $(git tag --list); do
         [ "$tag" = 'v0.0' ] && continue
         git tag --delete "$tag"
         git push origin ":refs/$tag"
@@ -34,7 +32,9 @@ function resetHistory() {
     read
 }
 
-declare -a dirs2=( base_container
+function resetHistoryOnDirs() {
+
+local -a dirs=(    base_container
                    bin
                    build_container
                    cesi
@@ -70,15 +70,72 @@ declare -a dirs2=( base_container
                    production-s4
                    supervisord
                    supervisord-monitor
+                   support
                    webdav
                    zenphoto
                )
 
-declare -a dirs=( support )
+    for d in "${dirs[@]}";do
+        [ -d "$dir" ] || return 1
+        pushd "$dir" &> /dev/null
+        resetHistory 2>&1 | tee "../${dir}.txt"
+        popd &> /dev/null
+    done
+}
 
-for d in "${dirs[@]}";do
-    [ -d "$dir" ] || return 1
-    pushd "$dir" &> /dev/null
-    resetHistory 2>&1 | tee "../${dir}.txt"
-    popd &> /dev/null
+declare -a skip=( base_container
+                  cesi
+                  build_container
+                  container_build_framework
+                  files-kafka
+                  files-librd
+                  jenkins
+                  gradle
+                  hubot
+                  kafka
+                  kafka-manager
+                  kafka-rest
+                  kafka-zookeeper
+                  movefiles
+                  mysql
+                  nagios
+                  nginx-base
+                  nginx-proxy
+                  nginx_alt
+                  nodervisor
+                  openjdk
+                  openjre
+                 )
+
+for dir in $(git submodule status | awk '{print $2}'); do
+
+    [ $(printf '%s\n' "${skip[@]}" | grep -cs "$dir") -gt 0 ] && continue
+    pushd $dir &>/dev/null
+
+    echo
+    echo $dir
+    git fetch --tags
+    for tag in $(git tag --list); do
+        [ "$tag" = 'v0.0' ] && continue
+        git tag --delete "$tag"
+        git push origin :refs/tags/$tag
+    done
+
+    declare repo=$(git config --get remote.origin.url)
+    for branch in $(git ls-remote --heads "$repo" | awk '{print substr($2,12)}'); do
+        git checkout $branch
+        git reset --hard $(git rev-list --max-parents=0 HEAD)
+        git clean -dfx
+        git pull
+    done
+
+    git checkout master
+    git tag v3.4
+    git push origin --tags
+    git checkout dev
+
+    git lg
+    read
+
+    popd &>/dev/null
 done
