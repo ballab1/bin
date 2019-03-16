@@ -1,0 +1,13 @@
+#!/bin/bash -x
+
+declare myUID=$(getent passwd $EUID | cut -d: -f3)
+declare myGID=$(getent passwd $EUID | cut -d: -f4) 
+declare myHOME=$(getent passwd $EUID | cut -d: -f6)
+
+sudo    chown "${myUID}:$myGID" "$myHOME"
+sudo    chown -R "${myUID}:$myGID" "${myHOME}/.ssh"
+sudo    chmod 755 "$myHOME"
+sudo    chmod 700 "${myHOME}/.ssh"
+sudo    chmod 600 "${myHOME}/.ssh"/*
+sudo    chmod 644 "${myHOME}/.ssh"/id_rsa.pub
+sudo    chmod 644 "${myHOME}/.ssh"/known_hosts
