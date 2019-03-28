@@ -26,11 +26,17 @@ HOST_IP=$(hostname -i)
 HOST_NAME=$(hostname -s)
 HOST_FQDN=$(hostname -f)
 CFG_USER_SECRETS=${CFG_USER_SECRETS:-}
+DOCKER_GID=$(getent group docker | cut -d: -f3)
 EOF
 
 export BUILDER_UID=$(getent passwd $EUID | cut -d: -f3)
 export BUILDER_GID=$(getent passwd $EUID | cut -d: -f4)
+
 [ -f ~/.crypt-key  ] || touch ~/.crypt-key
+
+# apply inspection of workspace to determine command when nothing supplied
+declare -a args=( "$@" )
+#[ "${#args[*]}" -gt 0 ] || args=( 'deduce_command_from_workspace' )
 
 # run our command
 docker-compose \
@@ -38,6 +44,6 @@ docker-compose \
            run --rm \
                --user "${BUILDER_UID}:$BUILDER_GID" \
                --name builder \
-           "$svc" build_container "$@"
+           "$svc" build_container "${args[@]}"
 
 cleanup

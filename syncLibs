@@ -16,6 +16,7 @@ export bld_files=${sup_files}/build_container/build/usr/local/crf/bashlib
 export bin_files=${sup_files}/build_container/build/usr/local/bin
 export grd_files=${sup_files}/gradle/build/usr/local/crf/bashlib
 
+declare -i DO_REMOTE=${DO_REMOTE:-0}
 
 function die()
 {
@@ -105,15 +106,18 @@ function localSync()
     syncLocal "$bld_files" "$lib_files"
     syncLocal "$cbf_files" "$lib_files"
     syncLocal "$sup_files" "$bin_files" 'oneWay'
-    syncRemote 'ubuntu-s3'
-    syncRemote 'ubuntu-s2'
-    syncRemote 'ubuntu-s1'
+    if [ $DO_REMOTE -gt 0 ]; then
+        syncRemote 'ubuntu-s3'
+        syncRemote 'ubuntu-s3'
+        syncRemote 'ubuntu-s2'
+        syncRemote 'ubuntu-s1'
+    fi
 }
 
 
 declare host=$(hostname)
 if [ "$host" = 'ubuntu-s4' ]; then
    localSync
-else
+elif [ $DO_REMOTE -gt 0 ]; then
    remoteSync "$host"
 fi

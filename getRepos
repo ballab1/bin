@@ -1,6 +1,6 @@
 #!/bin/bash
 
 find . -maxdepth 1 -mindepth 1 -type d -exec sudo rm -rf '{}' \;
-for repo in $(curl -s -k -u "$(< ~/.inf/secrets/credentials.github)" -X GET https://api.github.com/users/ballab1/repos?per_page=100 | jq '.[].html_url'); do
-    git clone "$(eval echo $repo)"
+for repo in $(curl -s -k -u "$(< ~/.inf/secrets/credentials.github)" -X GET https://api.github.com/users/ballab1/repos?per_page=100 | jq -r '.[].html_url'); do
+    git clone "$repo"
 done

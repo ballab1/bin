@@ -16,8 +16,8 @@ cd /c/home.config
 checkout production-s1
 checkout production-s3
 checkout production-s4
-checkout support v3.3-support
 checkout bin
 checkout versions
 checkout jenkins-pipelines
 checkout jenkins-sharedlibs
+checkout support v3.3-support dev

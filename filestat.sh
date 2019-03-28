@@ -16,15 +16,18 @@ stat --format='"owner group name": "%G",' $1
 stat --format='"number of hard links": "%h",' $1
 stat --format='"inode": "%i",' $1
 stat --format='"mount point": "%m",' $1
-stat --format='"quoted file name with dereference if symbolic link": "%N",' $1
+
+declare fn="$( stat --printf='%N' $1 )"
+fn=${fn//[\xE2\x80\x98\x99]/}
+echo "\"file name with dereference if symbolic link\": \"${fn}\","
 stat --format='"optimal I/O transfer size hint": "%o",' $1
 stat --format='"total size": "%s",' $1
-stat --format='"major device type in hex, for character/block device special files": "ox%t",' $1
+stat --format='"major device type in hex, for character/block device special files": "0x%t",' $1
 stat --format='"minor device type in hex, for character/block device special files": "0x%T",' $1
 stat --format='"user ID of owner": "%u",' $1
 stat --format='"user name of owner": "%U",' $1
 
-declare tob="$(stat --printf="%w" $1)"
+declare tob="$(stat --printf='%w' $1)"
 [ "$tob" = '-' ] && tob='unknown'
 echo "\"time of file birth, human-readable\": \"$tob\","
 

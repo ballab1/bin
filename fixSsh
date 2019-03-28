@@ -1,0 +1,26 @@
+#!/bin/bash
+
+declare myUID=$(getent passwd $EUID | cut -d: -f3)
+declare myGID=$(getent passwd $EUID | cut -d: -f4) 
+declare myHOME=$(getent passwd $EUID | cut -d: -f6)
+
+function verifyPermisions()
+{
+    local perms="${1:?}"
+    local file="${2:?}"
+
+    if [ "$(stat --format '%a %u:%g' "$file")" != "${perms} ${myUID}:$myGID" ]; then
+        echo -n "fixing '$file':: was $(stat --format '%A %U:%G' "$file")" 
+        sudo chown "${myUID}:$myGID" "$file"
+        sudo chmod "$perms" "$file"
+        echo "  is now $(stat --format '%A %U:%G' "$file")\n\n" 
+    fi
+}
+
+verifyPermisions 755 "$myHOME"
+verifyPermisions 700 "${myHOME}/.ssh"
+
+verifyPermisions 600 "${myHOME}/.ssh/authorized_keys"
+verifyPermisions 600 "${myHOME}/.ssh/id_rsa"
+verifyPermisions 644 "${myHOME}/.ssh/id_rsa.pub"
+verifyPermisions 644 "${myHOME}/.ssh/known_hosts"
