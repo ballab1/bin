@@ -1,0 +1,13 @@
+#!/bin/bash
+
+rmQuery() { [ -z "${tmp_file:-}" ] || [ ! -e "${tmp_file:-}" ] || rm "${tmp_file:-}" ; }
+trap rmQuery EXIT
+
+declare tmp_file=$(mktemp) 
+if [ $# -gt 0 ];then
+    printf '%s\n' "$@" > "$tmp_file"
+else
+    echo '.+' > "$tmp_file"
+fi
+
+grep -E -f "$tmp_file"

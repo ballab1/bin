@@ -1,0 +1,33 @@
+#!/bin/bash
+
+# A simple script to get information about mount points and pids and their
+# mount namespaces.
+# Reference: https://success.docker.com/article/how-to-find-and-resolve-devicemapper-device-or-resource-busy-error
+
+if [ $# -ne 1 ];then
+    echo "Usage: $0 <devicemapper-device-id>"
+    exit 1
+fi
+
+declare LINE MOUNT NAME PID
+declare -a MOUNTS
+declare ID=${1:?}
+
+
+mapfile -t MOUNTS < <(find /proc/*/mounts | grep "/$ID/" 2>/dev/null)
+
+[ "${#MOUNTS}" -eq 0 ] &&  echo "No pids found" && exit 0
+
+printf "PID\tNAME\t\tMOUNT\n"
+for LINE in "${MOUNTS[@]}"; do
+    PID="$(cut -d "/" -f3 <<< "$LINE")"
+
+    # Ignore self and thread-self
+    [ "$PID" = "self" ] &&  continue
+    [ "$PID" = "thread-self" ] && continue
+
+    NAME="$(ps -q $PID -o comm=)"
+    MOUNT="$(readlink /proc/$PID/ns/mnt)"
+    printf '%s\t%s\t\t%s\n' "$PID" "$NAME" "$MOUNT"
+done
+

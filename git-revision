@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# show revision of git repo
+
+declare repo="$( git remote get-url origin | awk -F '/' '{ print $5 }' | sed 's|.git||' )"
+declare branch="$(git rev-parse --abbrev-ref HEAD)"
+declare revision="$(git describe --tags --dirty --always)"
+echo "${repo}:${branch}:${revision}"

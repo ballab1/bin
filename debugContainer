@@ -1,6 +1,16 @@
 #!/bin/bash
 
-declare container="${1:?}"
+declare container="${1:-}"
+
+if [ -z "${container:-}" ]; then
+    declare -a exited=( $(docker ps -a --filter 'status=exited' --format '{{.ID}}') )
+    if [ "${#exited[*]}" -gt 0 ]; then
+        container="${exited[0]}"
+    else
+        echo 'No exited containers found. Please specify a container to debug.'
+        exit 1
+    fi
+fi
 
 if [ -z "$(docker ps --all | grep "$container" ||:)" ]; then
     echo "unable to find container: $container"
@@ -12,10 +22,12 @@ declare status="$(docker ps -a --filter "id=$id" --format '{{.Status}}')"
 
 [[ "$status" = Exited* ]] || [[ "$status" = Dead* ]] || echo "Container $id is still running"
 
-[ -z $(docker images | grep x:tmp ||:) ] || docker rmp x:tmp
+[ -z $(docker images | grep x:tmp ||:) ] || docker rm x:tmp
 
+declare name=$(docker ps -a --format '{{.Names}}\t{{.ID}}'| grep "$id" | awk '{print $1}')
+echo "Saving container '${name}', so it can be debugged. This may take a minute" 
 docker commit "$id" x:tmp
-docker run -it --rm --entrypoint bash x:tmp
+docker run -it --rm --volume "$PWD:/home/$USER" --entrypoint bash x:tmp
 
 echo 'Removing temporary image used for debug'
 docker rmi x:tmp

@@ -4,7 +4,7 @@
 set -o errexit
 set -o nounset
 set -o pipefail
-IFS=$'\n\t'
+IFS=$'/n/t'
 
 export HOME=/home/bobb
 export sup_files=${HOME}/GIT/support
@@ -18,6 +18,21 @@ export grd_files=${sup_files}/gradle/build/usr/local/crf/bashlib
 
 declare -i DO_REMOTE=${DO_REMOTE:-0}
 
+#----------------------------------------------------------------
+function binSync()
+{
+    local -r src=${1:?}
+
+    [ -d "$src" ] || die "directory '$src' does not exist"
+
+    local dst=/home/bobb/GIT/support/build_container/build/usr/local/bin
+    local f
+    for f in "$dst"/*; do
+        syncFile "${src}/$(basename "$f")" "$f"
+    done
+}
+
+#----------------------------------------------------------------
 function die()
 {
     local status=$?
@@ -26,30 +41,79 @@ function die()
     local args="$*"
     [ "${args:0:8}" = '***ERROR' ] || args="***ERROR: $args"
     ( echo
-      printf "\x1b[31m%s\x1b[0m\n" "$args"
+      printf '/x1b[31m%s/x1b[0m/n' "$args"
       echo
       ) >&2
     exit $status
 }
 
+#----------------------------------------------------------------
+function localSync()
+{
+    syncLocal "$prd_files" "$lib_files"
+
+    syncLocal "$bld_files" "$lib_files"
+    syncLocal "$bld_files" "$grd_files"
+    syncLocal "$bld_files" "$lib_files"
+
+    syncLocal "$cbf_files" "$lib_files"
+    syncLocal "$sup_files" "$bin_files" 'oneWay'
+
+    syncLocal "$prd_files" "$lib_files"
+    if [ "$DO_REMOTE" -gt 0 ]; then
+        syncRemote 'ubuntu-s1'
+        syncRemote 'ubuntu-s2'
+        syncRemote 'ubuntu-s3'
+    fi
+
+    binSync "$sup_files"
+    binSync "$prd_dir"
+}
+
+#----------------------------------------------------------------
 function remoteSync()
 {
     local -r host=${1:?}
 
     if [ "$host" != 'ubuntu-s2' ]; then
         pushd "$prd_files"
-        scp -r ubuntu-s4:${cbf_files}/* .
-        scp -r ubuntu-s4:${bld_files}/* .
-        scp ubuntu-s4:${bin_files}/deploy .
+        scp -r "ubuntu-s4:${cbf_files}"/* .
+        scp -r "ubuntu-s4:${bld_files}"/* .
+        scp "ubuntu-s4:${bin_files}/deploy" .
         popd
     fi
 
     pushd ~/bin
     git reset --hard HEAD~1
-    git pull
+    git pull -q
     popd
 }
 
+#----------------------------------------------------------------
+function syncFile()
+{
+    local -r src=${1:?}
+    local -r dst=${2:?}
+    local -r oneWay=${3:-}
+
+    [ -f "$src" ] || return 0
+
+    local sha1="$(sha256sum "$src" | cut -d' ' -f1)"
+    local sha2="$(sha256sum "$dst" | cut -d' ' -f1)"
+    [ "$sha1" != "$sha2" ] || return 0
+
+    if [ "$src" -nt "$dst" ]; then
+        echo "cp '$src' '$dst'"
+        cp "$src" "$dst"
+    elif [ "${oneWay:-}" ]; then
+        return 0
+    elif [ "$dst" -nt "$src" ]; then
+        echo "cp '$dst' '$src'"
+        cp "$dst" "$src"
+    fi
+}
+
+#----------------------------------------------------------------
 function syncLocal()
 {
     local -r src=${1:?}
@@ -59,65 +123,44 @@ function syncLocal()
     [ -d "$src" ] || die "directory '$src' does not exist"
     [ -d "$dst" ] || die "directory '$dst' does not exist"
 
-    for f in $(ls "$src"); do
-        [ "$f" != 'properties' ] || continue
-        if [ "${oneWay:-}" ]; then
-            [ ! -d "$f" ] && [ -x "$f" ] || continue
-        fi
-
-        local name="${dst}/$f"
-        sha2=$(sha256sum "$name" | cut -d' ' -f1)
-
-        f="${src}/$f"
-        sha1=$(sha256sum "$f" | cut -d' ' -f1)
-        [ "$sha1" != "$sha2" ] || continue
-
-        if [ "$f" -nt "$name" ]; then
-            echo "cp '$f' '$name'"
-            cp "$f" "$name"
-        elif [ "${oneWay:-}" ]; then
+    local -a files
+    mapfile -t files < <(find "$src" -mindepth 1 -maxdepth 1 -print)
+    for f1 in "${files[@]}"; do
+        f="$(basename "$f1")"
+        if [ "$f" = 'properties' ];then
+            syncLocal "${src}/properties" "${dst}/properties" "${oneWay:-}"
             continue
-        elif [ "$name" -nt "$f" ]; then
-            echo "cp '$name' '$f'"
-            cp "$name" "$f"
         fi
+        if [ "${oneWay:-}" ]; then
+            [[ ! -d "$f"  &&  -x "$f" ]] || continue
+        fi
+
+        syncFile "${src}/$f" "${dst}/$f" "${oneWay:-}"
     done
 }
 
+#----------------------------------------------------------------
 function syncRemote()
 {
     local -r host=${1:?}
 
     if [ "$host" != 'ubuntu-s2' ]; then
-        pushd "$prd_files"
-        scp -r ${cbf_files}/* ${host}:${prd_files}
-        scp -r ${bld_files}/* ${host}:${prd_files}
-        scp ${bin_files}/deploy ${host}:${prd_dir}
-        popd
+      ( pushd "$prd_files"
+        scp -r "${cbf_files}"/* "${host}:${prd_files}"
+        scp -r "${bld_files}"/* "${host}:${prd_files}"
+        scp "${bin_files}/deploy" "${host}:${prd_dir}"
+        popd ) &>/dev/null
     fi
 
-    ssh "$host" 'cd "${HOME}/bin"; git reset --hard HEAD~1 ; git pull;'
+    ssh "$host" 'cd "${HOME}/bin"; echo "$(hostname -s) ~/bin: $(git reset --hard HEAD~1)" ; git pull -q;'
 }
 
-function localSync()
-{
-    syncLocal "$bld_files" "$lib_files"
-    syncLocal "$bld_files" "$grd_files"
-    syncLocal "$bld_files" "$lib_files"
-    syncLocal "$cbf_files" "$lib_files"
-    syncLocal "$sup_files" "$bin_files" 'oneWay'
-    if [ $DO_REMOTE -gt 0 ]; then
-        syncRemote 'ubuntu-s3'
-        syncRemote 'ubuntu-s3'
-        syncRemote 'ubuntu-s2'
-        syncRemote 'ubuntu-s1'
-    fi
-}
+#----------------------------------------------------------------
 
 
-declare host=$(hostname)
+declare host="$(hostname)"
 if [ "$host" = 'ubuntu-s4' ]; then
    localSync
-elif [ $DO_REMOTE -gt 0 ]; then
+elif [ "$DO_REMOTE" -gt 0 ]; then
    remoteSync "$host"
 fi

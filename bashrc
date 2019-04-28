@@ -116,8 +116,8 @@ if ! shopt -oq posix; then
   fi
 fi
 
-[ -e ~/bin/bashlib ] && source ~/bin/bashlib
-[ -e ~/bin/git-prompt.sh ] && source ~/bin/git-prompt.sh
-[ -e ~/.inf/docker.inf ] && source ~/.inf/docker.inf
-[ -e ~/bin/bash_variables ] && source ~/bin/bash_variables
+[ -f ~/bin/bashlib ] && source ~/bin/bashlib
+[ -f ~/bin/git-prompt.sh ] && source ~/bin/git-prompt.sh
+[ -f ~/.inf/docker.inf ] && source ~/.inf/docker.inf
+[ -f ~/bin/bash_variables ] && source ~/bin/bash_variables
 

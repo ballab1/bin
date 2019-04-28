@@ -1,0 +1,22 @@
+#!/bin/bash
+
+
+declare awkCode
+read -r -d '' awkCode <<-EOF
+BEGIN {
+  split($0,arr,"$");
+  for (i in arr) {
+    if (i==1)
+      x = arr[i];
+    else if (i==2)
+      x = x "$" arr[i];
+    else {
+      sub("{.+-", "", arr[i]);
+      sub("}", "", arr[i]);
+      x = x arr[i];
+    }
+  }
+  print x;
+}
+EOF
+echo $awkCode

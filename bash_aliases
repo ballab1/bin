@@ -1,8 +1,6 @@
-source ~/bin/bashlib
-source ~/bin/git-prompt.sh
-
-alias ac='add-content'
 alias cbr='cbfRepos'
+alias dbc='debugContainer'
+alias dbs='debugBashScript'
 alias dc='docker-compose'
 alias dd='docker-dependants'
 alias de='docker exec -it'
@@ -16,6 +14,7 @@ alias dps='dockerProcesses'
 alias env='/usr/bin/env | sort'
 alias fdd='docker-find-dependents'
 alias fip='findInProjects'
+alias gk='git-keep'
 alias gr='git-revision'
 alias rcc='removeCurrentContainers'
 alias rlg='dockerRunLogs'

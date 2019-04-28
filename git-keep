@@ -15,7 +15,7 @@ set -v
 
 # merge content into specified commmit of current branch
 git add -A
-git commit -m ';'
+git commit -m ':git keep:'
 git reset --soft "$commit"
 git commit -m "$message"
 git push -f

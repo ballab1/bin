@@ -61,6 +61,9 @@ function other() {
     # update samba config
     # tasksel install samba-server
 EOF
+    [ -e ~/.tmux/tmp ] && rm ~/.tmux/tmp
+    mkdir -p ~/.tmux/tmp
+    chmod 777 -R ~/.tmux/tmp
 }
 
 
@@ -79,6 +82,8 @@ function redirectOwnBashFiles() {
     ln -s ~/bin/bash_logout ~/.bash_logout
     [ -e ~/.bashrc ] && rm ~/.bashrc
     ln -s ~/bin/bashrc ~/.bashrc
+    [ -e ~/.gitconfig ] && rm ~/.gitconfig
+    ln -s ~/bin/gitconfig ~/.gitconfig
 }
 
 function requiredPackages() {
