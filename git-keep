@@ -1,21 +1,83 @@
 #!/bin/bash
 
-# do nothing when we are not in a GIT directory
-if [ $(git rev-parse --is-inside-work-tree) != 'true' ]; then
-    echo 'this is not a GIT directory'
+#---------------------------------------------------------------------------------------------- 
+function usage() {
+    cat >&2 << EOF
+Usage:
+    git keep [ -h|--help ] | [ --history ] | [ --commit <commitId> ] | [ --message <message>]
+
+    Common options:
+        -h --help                Display a basic set of usage instructions
+        -c --commit <commitId>   use <commitId> as basis. 
+                                 If not specified, HEAD~1 is used as basis, which causes HEAD to be overwritten 
+        -m --messaage <message>  use <message> as the commit messate
+                                 If not specified, the commit message from HEAD is reused for new commit
+           --history             show history of commitId's coresponding to 'git keep' 
+
+    Save all changes in current repository to upstream branch on GitHub server
+
+EOF
     exit 0
-fi
+}
 
-# do nothing when tree is clean 
-[ "$(git diff HEAD)" ] || [ "$(git status --porcelain)" ] || exit 0
+#---------------------------------------------------------------------------------------------- 
+function history() {
+    git reflog | grep ':git keep:'
+    exit 0
+}
 
-declare commit="${1:-$(git rev-parse HEAD~1)}"
-declare message="${2:-$(git log -1 --format=%s)}"
-set -v
+#---------------------------------------------------------------------------------------------- 
+function verify() {
+    # do nothing when we are not in a GIT directory
+    if [ $(git rev-parse --is-inside-work-tree) != 'true' ]; then
+        echo 'this is not a GIT directory'
+        exit 0
+    fi
 
-# merge content into specified commmit of current branch
-git add -A
-git commit -m ':git keep:'
-git reset --soft "$commit"
-git commit -m "$message"
-git push -f
+    # do nothing when tree is clean 
+    [ "$(git diff HEAD)" ] || [ "$(git status --porcelain)" ] || exit 0
+}
+
+#---------------------------------------------------------------------------------------------- 
+function keep() {
+    declare commit="${1:?}"
+    declare message="${2:?}"
+    set -v
+
+    # merge content into specified commmit of current branch
+    git add -A
+    git commit -m ':git keep:'
+    git reset --soft "$commit"
+    git commit -m "$message"
+    git push -f
+    exit 0
+}
+
+#---------------------------------------------------------------------------------------------- 
+#
+#       MAIN
+#
+#---------------------------------------------------------------------------------------------- 
+
+declare -r progname="$( basename "${BASH_SOURCE[0]}" )" 
+declare -r options=$(getopt --longoptions "help,Help,HELP,commit:,history,message:" --options "Hhc:m:" --name "$progname" -- "$@") || usage
+eval set -- "$options"
+
+declare -A opts=()
+declare -i i=0
+while [ $# -gt 0 ]; do
+    case "${1:-}" in
+        -h|--h|--help|-help)  usage;;
+        -H|--H|--HELP|-HELP)  usage;;
+        --Help|-Help)         usage;;
+        -c|--c|--commit)      opts['commit']=$2; shift 2;;
+               --history)     history;;
+        -m|--m|--message)     opts['commit']=$2; shift 2;;
+        --)                   shift; break;;
+    esac
+done 
+
+verify
+[ -z "${opts['commit']:-}" ] && opts['commit']="$(git rev-parse HEAD~1)"
+[ -z "${opts['message']:-}" ] && opts['message']="$(git log -1 --format=%s)"
+keep "${opts['commit']}" "${opts['message']}"

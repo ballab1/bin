@@ -23,9 +23,6 @@ CBF.properties
 scanned.paths
 *.loaded
 
-PluginUpdator/*.txt
-PluginUpdator/Dockerfile*
-PluginUpdator/01.JENKINS*
 test/*.txt
 .groovy
 **/*.class

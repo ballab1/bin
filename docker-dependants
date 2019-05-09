@@ -261,7 +261,7 @@ function findNamedImage()
 
     # check images for info about a specified parent
     for named_image in "${!NAMED_IMAGES[@]}"; do
-        if [ "${NAMED_IMAGES[$named_image]}" = "$image" ]; then
+        if [ "$named_image" = "$image" ] || [ "${NAMED_IMAGES[$named_image]}" = "$image" ]; then
             echo "$named_image"
             return 0
         fi
@@ -272,18 +272,18 @@ function findNamedImage()
 # determine any images which use specified dependents as a layer on which they build
 function getAllImages()
 {
-    [ ${#PARENT_IMAGE_IDS[*]} -eq 0 ] || printf '%s\n' "${PARENT_IMAGE_IDS[@]}"
-    if [ ${#MATCHED_CONTAINER_IDS[*]} -gt 0 ]; then
-        local name image
-        local -a props
-        for name in "${!MATCHED_CONTAINER_IDS[@]}"; do
-            [ "${MATCHED_CONTAINER_IDS[$name]:-}" ] || continue
-            props=( ${MATCHED_CONTAINER_IDS[$name]} )
-            image="${props[1]:-}"
-            [ "${image:-}" ] || continue
-            [ -z "${NAMED_IMAGES[$image]:-}" ] || echo "${NAMED_IMAGES[$image]}"
-        done
-    fi
+    [ "${#PARENT_IMAGE_IDS[*]:-}" -ne 0 ] && printf '%s\n' "${PARENT_IMAGE_IDS[@]}"
+    [ "${#MATCHED_CONTAINER_IDS[*]:-}" -eq 0 ] && return 0
+
+    local name image
+    local -a props
+    for name in "${!MATCHED_CONTAINER_IDS[@]}"; do
+        [ "${MATCHED_CONTAINER_IDS[$name]:-}" ] || continue
+        props=( ${MATCHED_CONTAINER_IDS[$name]} )
+        image="$(findNamedImage "${props[1]:-}")"
+        [ "${image:-}" ] || continue
+        [ -z "${NAMED_IMAGES[$image]:-}" ] || echo "${NAMED_IMAGES[$image]}"
+    done
 }
 
 #------------------------------------------------------------------------------------------
@@ -313,27 +313,27 @@ function getOsId()
 function populateSpecifiedImageDependencies()
 {
     local -a specifiedImages=( "$@" )
+    [ "${#specifiedImages[*]}" -eq 0 ] && return 0
 
     local parentId
     local -a dependents
-    if [ ${#specifiedImages[*]} -gt 0 ]; then
-        for parentId in "${specifiedImages[@]}"; do
-            [ -z "${SPECIFIED_IMAGE_DEPENDENCIES[$parentId]:-}" ] || continue
+    for parentId in "${specifiedImages[@]}"; do
+        [ -z "${parentId:-}" ] && continue
+        [ "${SPECIFIED_IMAGE_DEPENDENCIES[$parentId]:-}" ] && continue
 
-            mapfile -t dependents < <(getDependentImages  "$parentId")
-            if [ ${#dependents[*]} -gt 0 ]; then
-                SPECIFIED_IMAGE_DEPENDENCIES[$parentId]="${dependents[*]}"
-                printf "[%s]='%s\\n'" "$parentId" "${dependents[*]}"
-                populateSpecifiedImageDependencies "${dependents[@]}"
-            fi
-        done
-    fi
+        mapfile -t dependents < <(getDependentImages  "$parentId")
+        if [ ${#dependents[*]} -gt 0 ]; then
+            SPECIFIED_IMAGE_DEPENDENCIES[$parentId]="${dependents[*]}"
+            printf "[%s]='%s\\n'" "$parentId" "${dependents[*]}"
+            populateSpecifiedImageDependencies "${dependents[@]}"
+        fi
+    done
 }
 
 #------------------------------------------------------------------------------------------
 function reportDependentImages()
 {
-    [ $IS_VERBOSE -ne 0 ] || return 0
+    [ $IS_VERBOSE -eq 0 ] && return 0
 
     local image
     local -i dependants=0
@@ -347,7 +347,7 @@ function reportDependentImages()
 #------------------------------------------------------------------------------------------
 function reportDistinctImages()
 {
-    [ $IS_VERBOSE -ne 0 ] || return 0
+    [ $IS_VERBOSE -eq 0 ] && return 0
 
     verbose "    Detected ${#SPECIFIED_IMAGE_IDS[*]} distinct images dependent on specified images"
     [ ${#SPECIFIED_IMAGE_IDS[*]} -gt 0 ] || return 0
@@ -363,7 +363,7 @@ function reportDistinctImages()
 #------------------------------------------------------------------------------------------
 function reportMatchingContainers()
 {
-    [ $IS_VERBOSE -ne 0 ] || return 0
+    [ $IS_VERBOSE -eq 0 ] && return 0
 
     verbose "    Found ${#MATCHED_CONTAINER_IDS[*]} matching containers"
     [ ${#MATCHED_CONTAINER_IDS[*]} -gt 0 ] || return 0
@@ -386,8 +386,8 @@ function showContainerInfo()
     colorEcho 'YELLOW' '\nExecuting'; echo -en ' container '; colorEcho 'GREEN' "$name\\n"
 
     local containerId="${props[0]:-}"
-    local image="${props[1]:-}"
-    local imageId="$(findNamedImage "$image")"
+    local imageId="${props[1]:-}"
+    local image="$(findNamedImage "$imageId")"
 
 
     colorEcho 'blue'   'Container Name:   '; echoImage "$name\\n" "$name\\n"
@@ -419,6 +419,8 @@ function showContainers()
 #------------------------------------------------------------------------------------------
 function showImages()
 {
+    [ "${#SPECIFIED_IMAGE_IDS[*]}" -eq 0 ] && return 0
+
     echo
     local imageId
     for imageId in "${SPECIFIED_IMAGE_IDS[@]}"; do
@@ -489,7 +491,7 @@ function showImageLayers()
     local -i imageCount namedImageCount
     local id="$image"   
     image="${IMAGES[$id]:-}"
-    [ "${image:-}" ] || return 0
+    [ -z "${image:-}" ] && return 0
 
     # now show what this image depends on
     imageCount=0
@@ -529,7 +531,7 @@ function showLabels()
 
 
     local -a labels=( $(docker inspect "$image" |  jq -r 'try .[].Config.Labels | to_entries[] | "\(.key)=\(.value)"') )
-    [ ${#labels[*]} -gt 0 ] || return 0
+    [ "${#labels[*]}" -eq 0 ] && return 0
 
     colorEcho 'blue'   '       Labels:   '; echo "${labels[0]}"
 
@@ -561,7 +563,7 @@ function showReport()
 #------------------------------------------------------------------------------------------
 function verbose()
 {
-    [ $IS_VERBOSE -ne 0 ] || return 0
+    [ $IS_VERBOSE -eq 0 ] && return 0
     if [ $# -gt 0 ]; then
         echo -e "$*"  >&2
     fi
@@ -605,8 +607,9 @@ verbose "    Detected ${#NAMED_IMAGES[*]} named images"
 
 
 # Populate the container info hash
-eval "CONTAINERS=( $( jq -r '.[]|"[\(.Names[0]|ltrimstr("/"))]=\"\(.Id)\n\"\(.Image)"' <<< "$CONTAINERSJSON") )"
+eval "CONTAINERS=( $( jq -r '.[]|"[\(.Names[0]|ltrimstr("/"))]=\"\(.Id)\n\"\(.ImageID)"' <<< "$CONTAINERSJSON") )"
 verbose "    Detected ${#CONTAINERS[*]} containers"
+
 
 
 # determine any containers coresponding to specified dependents
@@ -614,13 +617,11 @@ eval "MATCHED_CONTAINER_IDS=( $(findContainers "${SPECIFIED_DOCKER_REFS[@]}") )"
 reportMatchingContainers 
 
 
-
 # determine the image IDs coresponding to specified dependents
 mapfile -t PARENT_IMAGE_IDS < <(findImageIds "${SPECIFIED_DOCKER_REFS[@]}")
 [ ${#PARENT_IMAGE_IDS[*]} -eq 0 ] && [ ${#MATCHED_CONTAINER_IDS[*]} -eq 0 ] && die 'No parent images or containers found'
 verbose "    Detected ${#MATCHED_CONTAINER_IDS[*]} containers of dependents"
 verbose "    Detected ${#PARENT_IMAGE_IDS[*]} images associated with specified references"
-
 
 
 
@@ -638,10 +639,9 @@ reportDistinctImages
 
 # determine any images which use specified dependents as a layer on which they build
 SPECIFIED_IMAGE_DEPENDENCIES=()
-eval "SPECIFIED_IMAGE_DEPENDENCIES=( $(populateSpecifiedImageDependencies "${SPECIFIED_IMAGE_IDS[@]}") )"
+eval "SPECIFIED_IMAGE_DEPENDENCIES=( $(populateSpecifiedImageDependencies "${SPECIFIED_IMAGE_IDS[@]:-}") )"
 #reportDependentImages
 echo
-
 
 # report what we have discovered
 [ $IS_REPORT -eq 0 ] || showReport "${SPECIFIED_DOCKER_REFS[@]}"
