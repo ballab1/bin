@@ -1,56 +1,68 @@
 #!/bin/bash
 
 #---------------------------------------------------------------------------------------------- 
-function usage() {
+function usage()
+{
     cat >&2 << EOF
+Save all changes in current repository to upstream branch on GitHub server
+Squash merges outstanding changes in the current repo.
+    
 Usage:
-    git keep [ -h|--help ] | [ --history ] | [ --commit <commitId> ] | [ --message <message>]
+    git-keep [ -h|--help ] | [ --history ] | [ --commit <commitId> ] | [ --message <message>]
 
     Common options:
         -h --help                Display a basic set of usage instructions
         -c --commit <commitId>   use <commitId> as basis. 
                                  If not specified, HEAD~1 is used as basis, which causes HEAD to be overwritten 
-        -m --messaage <message>  use <message> as the commit messate
+        -m --message <message>   use <message> as the commit message
                                  If not specified, the commit message from HEAD is reused for new commit
-           --history             show history of commitId's coresponding to 'git keep' 
+           --history             show history of commitId's corResponding to 'git keep' 
 
-    Save all changes in current repository to upstream branch on GitHub server
+
+NOTE: this should only be used on developer branches. DO not use on a shared branch.
 
 EOF
     exit 0
 }
 
 #---------------------------------------------------------------------------------------------- 
-function history() {
+function history()
+{
+    # search and display the history in current local workspace for any previous occasions where 'git-keep' was used
+    [ $DEBUG -ne 0 ] && echo -e "${grey}git reflog | grep ':git keep:'$reset"
     git reflog | grep ':git keep:'
     exit 0
 }
 
 #---------------------------------------------------------------------------------------------- 
-function verify() {
-    # do nothing when we are not in a GIT directory
-    if [ $(git rev-parse --is-inside-work-tree) != 'true' ]; then
-        echo 'this is not a GIT directory'
-        exit 0
-    fi
+function keep()
+{
+    declare commit="${1:?}"
+    declare message="${2:?}"
 
-    # do nothing when tree is clean 
-    [ "$(git diff HEAD)" ] || [ "$(git status --porcelain)" ] || exit 0
+    # merge content into specified commit of current branch
+    run "git add -A"
+    run "git commit -m ':git keep: $(date)'"
+    run "git reset --soft $commit"
+    run "git commit -m '$message'"
+    run "git push -f"
 }
 
 #---------------------------------------------------------------------------------------------- 
-function keep() {
-    declare commit="${1:?}"
-    declare message="${2:?}"
-    set -v
+function run()
+{
+    [ $DEBUG -ne 0 ] && echo -e "${grey}${*}$reset"
+    eval $@
+}
 
-    # merge content into specified commmit of current branch
-    git add -A
-    git commit -m ':git keep:'
-    git reset --soft "$commit"
-    git commit -m "$message"
-    git push -f
-    exit 0
+#---------------------------------------------------------------------------------------------- 
+function verify()
+{
+    # do nothing when we are not in a GIT directory
+    ! git rev-parse --is-inside-work-tree >/dev/null && exit $?
+
+    # do nothing when tree is clean 
+    [ "$(git diff HEAD)" ] || [ "$(git status --porcelain)" ] || exit 0
 }
 
 #---------------------------------------------------------------------------------------------- 
@@ -59,7 +71,11 @@ function keep() {
 #
 #---------------------------------------------------------------------------------------------- 
 
+declare -r DEBUG=${DEBUG:-1}    # set to 0 if you do not wish to see native 'git' commands
+declare -r grey='\e[90m'
+declare -r reset='\e[0m'
 declare -r progname="$( basename "${BASH_SOURCE[0]}" )" 
+
 declare -r options=$(getopt --longoptions "help,Help,HELP,commit:,history,message:" --options "Hhc:m:" --name "$progname" -- "$@") || usage
 eval set -- "$options"
 
@@ -77,7 +93,12 @@ while [ $# -gt 0 ]; do
     esac
 done 
 
+# check for changes
 verify
+
+# default arguments when nothing specified
 [ -z "${opts['commit']:-}" ] && opts['commit']="$(git rev-parse HEAD~1)"
 [ -z "${opts['message']:-}" ] && opts['message']="$(git log -1 --format=%s)"
+
+# do our stuff
 keep "${opts['commit']}" "${opts['message']}"

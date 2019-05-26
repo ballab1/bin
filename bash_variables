@@ -2,6 +2,7 @@ export BASH_UNIT_ROOT=~/GIT/bash_unit
 export TMUX_TMPDIR=~/.tmux/tmp
 export DOCKER_REGISTRY=ubuntu-s2:5000/
 
+export GRADLE_USER_HOME=/home/bobb
 export KAFKA_CLUSTER='home'
 export KAFKA_AVRO_HOSTS=ubuntu-s3,ubuntu-s4,ubuntu-s1
 export KAFKA_BOOTSTRAP_SERVERS=ubuntu-s3:9092,ubuntu-s4:9092,ubuntu-s1:9092
@@ -28,4 +29,4 @@ PROMPT_COMMAND='__git_ps1 "\\[\\e[1;32m\\]\u@\h\\[\\e[0m\\] \\[\\e[1;33m\\]\w\\[
 export CFG_USER_SECRETS=~/.inf
 #export CFG_USER_SECRETS=https://github.com/ballab1/secrets.git
 
-export PATH=${PATH}:~/GIT/git-submodule-tools/bin;~/bin/test
+export PATH=${PATH}:~/GIT/git-submodule-tools/bin:~/bin/test

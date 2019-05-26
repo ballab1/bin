@@ -53,7 +53,7 @@ function localSync()
     syncLocal "$prd_files" "$lib_files"
 
     syncLocal "$bld_files" "$lib_files"
-    syncLocal "$bld_files" "$grd_files"
+    [ -d "${sup_files}/gradle" ] && syncLocal "$bld_files" "$grd_files"
     syncLocal "$bld_files" "$lib_files"
 
     syncLocal "$cbf_files" "$lib_files"
@@ -153,6 +153,7 @@ function syncRemote()
     fi
 
     ssh "$host" 'cd "${HOME}/bin"; echo "$(hostname -s) ~/bin: $(git reset --hard HEAD~1)" ; git pull -q;'
+    ssh "$host" 'cd "${HOME}/.work"; echo "$(hostname -s) ~/.work: $(git reset --hard HEAD~1)" ; git pull -q;'
 }
 
 #----------------------------------------------------------------

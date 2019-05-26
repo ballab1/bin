@@ -20,20 +20,24 @@ if [ ${#collection[@]} -gt 0 ]; then
 fi
 
 
-
 # remove any 'dangling' images  (those with <none> in name)
 
 collection=( $(docker images --quiet --filter "dangling=true") )
-declare image
+
+declare fingerprint image
 for image in $(docker image ls --format '{{.Repository}}:{{.Tag}}' | grep ':tmp'); do
     collection+=( $image )
 done
 for image in $(docker image ls --format '{{.Repository}}:{{.Tag}}' | grep -v '<none>'); do
-    [ $(docker inspect "$image" | jq -r '.[].Config.Labels."container.fingerprint"?') = "${image##*:}" ] || continue
+    fingerprint=$(docker inspect "$image" | jq -r '.[].Config.Labels."container.fingerprint"?') ||:
+    [ -z "${fingerprint}:-" ] && continue
+    [ "$fingerprint" != "${image##*:}" ] && continue
     collection+=( $image )
 done
 for image in $(docker images | grep '<none>' | awk '{if($1 == "<none>"){print $3}}'); do
-    [ $(docker inspect "$image" | jq -r '.[].Config.Labels."container.fingerprint"?') = "${image##*:}" ] || continue
+    fingerprint=$(docker inspect "$image" | jq -r '.[].Config.Labels."container.fingerprint"?') ||:
+    [ -z "${fingerprint}:-" ] && continue
+    [ "$fingerprint" != "${image##*:}" ] && continue
     collection+=( $image )
 done
 for image in $(docker ps --format '{{.Image}}' | sort -u); do
@@ -71,7 +75,8 @@ done
 # show results
 
 declare -i blocksUsedAfter="$(df /var/lib/docker/volumes | awk '{if (NR==2) {print $3}}')"
-printf "Recovered %d kb\n" $(( blocksUsedBefore - blocksUsedAfter ))
+declare -i recovered=$(( blocksUsedBefore - blocksUsedAfter ))
+[ "$recovered" -gt 0 ] && printf "Recovered %d kb\n" $recovered
 echo
 
 mapfile -t images < <(docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.CreatedSince}}\t{{.Size}}")

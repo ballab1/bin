@@ -1,10 +1,11 @@
 #!/bin/bash
-#############################################################################
+
+#----------------------------------------------------------------------------
 #
 #   trap.bashlib
 #
-#----------------------------------------------------------------------------
 
+#----------------------------------------------------------------------------------------------
 # trap initialization
 function trap.__init()
 {
@@ -19,6 +20,7 @@ function trap.__init()
     trap trap.catch_int INT
     trap trap.catch_pipe PIPE
 }
+export -f trap.__init
 
 #----------------------------------------------------------------------------
 # Exit on any error
@@ -64,14 +66,14 @@ function trap.die()
     local args="$*"
     [ "${args:0:8}" = '***ERROR' ] || args="***ERROR: $args"
     ( echo ''; trap.log "$args" ; echo '') >&2
-    [ "${DEBUG_TRACE:-}" = "2" ] || exit $status
+    [ "${DEBUG_TRACE:-0}" = "2" ] || exit $status
 }
 export -f trap.die
 
 #----------------------------------------------------------------------------
 function trap.log()
 {
-    printf "\x1b[31m%s\x1b[0m\n" "$1" >&2
+    printf '\x1b[31m%s\x1b[0m\n' "$1" >&2
 }
 export -f trap.log
 
@@ -88,7 +90,7 @@ function trap.stacktrace()
     if [ ${#FUNCNAME[@]} -gt 2 ]; then
         trap.log "Stack trace:"
         for ((i=1;i<${#FUNCNAME[@]}-1;i++)); do
-            trap.log "$(printf ">>>    %02d: %s %s  <<<" "$i" "${BASH_SOURCE[$i+1]}:${BASH_LINENO[$i]}" "${FUNCNAME[$i]}" )"
+            trap.log "$(printf '>>>    %02d: %s %s  <<<' "$i" "${BASH_SOURCE[$i+1]}:${BASH_LINENO[$i]}" "${FUNCNAME[$i]}" )"
         done
     fi
     eval "$__trap_options"
