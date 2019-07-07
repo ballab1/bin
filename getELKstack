@@ -1,10 +1,10 @@
-!#/bin/bash
+#!/bin/bash
 
 declare version=${1:-7.0.1}
 
-./getImage docker.elastic.co/elasticsearch/elasticsearch:$version
-./getImage docker.elastic.co/kibana/kibana:$version
-./getImage docker.elastic.co/logstash/logstash:$version
-./getImage docker.elastic.co/beats/filebeat:$version
-./getImage docker.elastic.co/beats/journalbeat:$version
-
+getImage docker.elastic.co/elasticsearch/elasticsearch:$version
+getImage docker.elastic.co/kibana/kibana:$version
+getImage docker.elastic.co/logstash/logstash:$version
+getImage docker.elastic.co/beats/filebeat:$version
+getImage docker.elastic.co/beats/journalbeat:$version
+getImage docker.elastic.co/beats/metricbeat:$version

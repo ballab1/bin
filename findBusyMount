@@ -9,25 +9,26 @@ if [ $# -ne 1 ];then
     exit 1
 fi
 
-declare LINE MOUNT NAME PID
-declare -a MOUNTS
+declare MNTNS NAME PID
+declare -a PIDS
 declare ID=${1:?}
 
 
-mapfile -t MOUNTS < <(find /proc/*/mounts | grep "/$ID/" 2>/dev/null)
+mapfile -t PIDS < <(grep  "$ID" 2>/dev/null  $(find /proc/*/mounts 2>/dev/null) | cut -d '/' -f3)
 
-[ "${#MOUNTS}" -eq 0 ] &&  echo "No pids found" && exit 0
+[ "${#PIDS[*]}" -eq 0 ] &&  echo "No pids found" && exit 0
 
-printf "PID\tNAME\t\tMOUNT\n"
-for LINE in "${MOUNTS[@]}"; do
-    PID="$(cut -d "/" -f3 <<< "$LINE")"
+printf "PID\tMNTNS\t\t\tNAME\n"
+for PID in $(printf '%s\n' "${PIDS[@]}" | sort -g); do
 
     # Ignore self and thread-self
     [ "$PID" = "self" ] &&  continue
     [ "$PID" = "thread-self" ] && continue
 
-    NAME="$(ps -q $PID -o comm=)"
-    MOUNT="$(readlink /proc/$PID/ns/mnt)"
-    printf '%s\t%s\t\t%s\n' "$PID" "$NAME" "$MOUNT"
+    MNTNS="$(readlink /proc/${PID}/ns/mnt)"
+    [ -z "${MNTNS:-}" ] && continue
+
+    NAME="$(ps -q "$PID" -o comm=)"
+    printf '%s\t%s\t%-20s\t%s\n' "$PID" "$MNTNS" "$NAME" "$(ps -q "$PID" -o cmd=)"
 done
 

@@ -8,7 +8,7 @@
 declare yaml=${1:-docker-compose.yml}
 if [ -e "$yaml" ]; then
 
-    declare jsonConfig=$(python -c 'import sys, yaml, json; json.dump(yaml.load(sys.stdin), sys.stdout, indent=4)' < "$yaml" | jq '.services?')
+    declare jsonConfig=$(python -c 'import sys, yaml, json; json.dump(yaml.safe_load(sys.stdin), sys.stdout, indent=4)' < "$yaml" | jq '.services?')
     if [ "${jsonConfig:-}" ]; then
         for service in $(jq 'keys[]?' <<< "$jsonConfig"); do
             eval echo $service

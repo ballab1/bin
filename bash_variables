@@ -27,6 +27,7 @@ PROMPT_COMMAND='__git_ps1 "\\[\\e[1;32m\\]\u@\h\\[\\e[0m\\] \\[\\e[1;33m\\]\w\\[
 #PROMPT_COMMAND='__git_ps1 "\u@\h:\w" "\\\$ "'
 
 export CFG_USER_SECRETS=~/.inf
+export __SECRETS_FILE=~/.inf/secret.properties
 #export CFG_USER_SECRETS=https://github.com/ballab1/secrets.git
 
 export PATH=${PATH}:~/GIT/git-submodule-tools/bin:~/bin/test

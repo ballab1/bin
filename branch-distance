@@ -6,6 +6,8 @@ if [ $(git rev-parse --is-inside-work-tree) != 'true' ]; then
     exit 0
 fi
 
+declare repo="$(basename "$(git remote get-url origin)")"
+repo="${repo/.git}"
 declare master="${1:-master}"
 
 declare -i count=0
@@ -23,11 +25,20 @@ if [ $count -eq 0 ]; then
     exit 0
 fi
 
+declare -i LEFT_AHEAD RIGHT_AHEAD
+
 while read -r test_branch; do
 
     [ "$test_branch" = "$master" ] && continue
-    declare distance=$(git rev-list --left-right --count ${master}...${test_branch} | awk '{print $2}')
-    [ "$distance" -eq 0 ] && continue
-    echo "    $test_branch:  $distance commits from $master"
+
+    git rev-list --left-right ${test_branch}...origin/${master} -- 2>/dev/null >/tmp/git_upstream_status_delta || continue
+    LEFT_AHEAD=$(grep -c '^<' /tmp/git_upstream_status_delta)
+    RIGHT_AHEAD=$(grep -c '^>' /tmp/git_upstream_status_delta)
+    [ $LEFT_AHEAD -eq 0 ] && [ $RIGHT_AHEAD -eq 0 ] && continue
+    echo "${repo} | ${test_branch} (ahead $LEFT_AHEAD) | (behind $RIGHT_AHEAD) origin/$master"
+
+#    declare distance=$(git rev-list --left-right --count origin/${master}...${test_branch} | awk '{print $2}')
+#    [ "$distance" -eq 0 ] && continue
+#    echo "${repo} ${test_branch}:  ${distance} commits from $master"
 
 done < <(git for-each-ref --format="%(refname:lstrip=2)" refs/heads)

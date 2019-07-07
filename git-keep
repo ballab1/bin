@@ -30,7 +30,7 @@ function history()
 {
     # search and display the history in current local workspace for any previous occasions where 'git-keep' was used
     [ $DEBUG -ne 0 ] && echo -e "${grey}git reflog | grep ':git keep:'$reset"
-    git reflog | grep ':git keep:'
+    git reflog | grep ':git keep:' | more
     exit 0
 }
 
@@ -41,9 +41,13 @@ function keep()
     declare message="${2:?}"
 
     # merge content into specified commit of current branch
-    run "git add -A"
-    run "git commit -m ':git keep: $(date)'"
-    run "git reset --soft $commit"
+    if [ $(git rev-parse --abbrev-ref HEAD) = "$MASTER" ] || [ $(git rev-parse HEAD) != $(git rev-parse "$MASTER") ]; then
+        run "git add -A"
+        run "git commit -m ':git keep: $(date)'"
+        run "git reset --soft $commit"
+    else
+        run "git add -A"
+    fi
     run "git commit -m '$message'"
     run "git push -f"
 }
@@ -72,6 +76,7 @@ function verify()
 #---------------------------------------------------------------------------------------------- 
 
 declare -r DEBUG=${DEBUG:-1}    # set to 0 if you do not wish to see native 'git' commands
+declare -r MASTER=master
 declare -r grey='\e[90m'
 declare -r reset='\e[0m'
 declare -r progname="$( basename "${BASH_SOURCE[0]}" )" 

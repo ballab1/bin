@@ -8,6 +8,8 @@ IFS=$'/n/t'
 
 export HOME=/home/bobb
 export sup_files=${HOME}/GIT/support
+export nag_dir=${HOME}/nagios-deploy
+export nag_files=${nag_dir}/libs
 export prd_dir=${HOME}/production
 export prd_files=${prd_dir}/libs
 export lib_files=${sup_files}/libs
@@ -23,7 +25,8 @@ function binSync()
 {
     local -r src=${1:?}
 
-    [ -d "$src" ] || die "directory '$src' does not exist"
+    [ -d "$src" ] || return 0
+#    [ -d "$src" ] || die "directory '$src' does not exist"
 
     local dst=/home/bobb/GIT/support/build_container/build/usr/local/bin
     local f
@@ -41,7 +44,7 @@ function die()
     local args="$*"
     [ "${args:0:8}" = '***ERROR' ] || args="***ERROR: $args"
     ( echo
-      printf '/x1b[31m%s/x1b[0m/n' "$args"
+      printf '\x1b[31m%s\x1b[0m\n' "$args"
       echo
       ) >&2
     exit $status
@@ -64,9 +67,12 @@ function localSync()
         syncRemote 'ubuntu-s1'
         syncRemote 'ubuntu-s2'
         syncRemote 'ubuntu-s3'
+        syncRemote 'ubuntu-s5'
+        syncRemote 'ubuntu-s6'
     fi
 
     binSync "$sup_files"
+    binSync "$nag_dir"
     binSync "$prd_dir"
 }
 
