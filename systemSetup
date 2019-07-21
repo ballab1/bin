@@ -4,7 +4,7 @@ declare -r DC_COMPOSE_VER=1.23.1
 
 function exposeDockerRestAPI() {
     echo 'Exposing docker REST API'
-    sed -iE 's|^ExecStart=/usr/bin/dockerd.*$|ExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:4243|' /lib/systemd/system/docker.service
+    sed -iE 's|^ExecStart=/usr/bin/dockerd.*$|ExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:4243 /lib/systemd/system/docker.service
     systemctl daemon-reload
     systemctl restart docker
 }

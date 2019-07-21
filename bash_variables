@@ -1,4 +1,4 @@
-export BASH_UNIT_ROOT=~/GIT/bash_unit
+export BASH_UNIT_ROOT=~/GIT/other/bash_unit
 export TMUX_TMPDIR=~/.tmux/tmp
 export DOCKER_REGISTRY=ubuntu-s2:5000/
 
@@ -30,4 +30,4 @@ export CFG_USER_SECRETS=~/.inf
 export __SECRETS_FILE=~/.inf/secret.properties
 #export CFG_USER_SECRETS=https://github.com/ballab1/secrets.git
 
-export PATH=${PATH}:~/GIT/git-submodule-tools/bin:~/bin/test
+export PATH=${PATH}:~/bin/git:~/bin/test

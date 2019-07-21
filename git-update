@@ -1,0 +1,101 @@
+#!/bin/bash
+
+#---------------------------------------------------------------------------------------------- 
+function usage()
+{
+    cat >&2 << EOF
+Make the <branch_to_update> the same as the 'reference <branch>'
+
+Usage:
+    git-update [ -h|--help ] | [ --reference <branch> ] [ <branch_to_update> ]
+
+    Common options:
+        -h --help                Display a basic set of usage instructions
+        -r --reference <branch>  use <branch> as the reference
+
+EOF
+    exit 0
+}
+
+#---------------------------------------------------------------------------------------------- 
+function update()
+{
+    declare repo="${1:?}"
+    declare branch="${2:?}"
+    declare ref="${3:?}"
+
+    local -i LEFT_AHEAD RIGHT_AHEAD
+    local -r tmpfile="/tmp/git_upstream_status_delta.$$" 
+
+    run git fetch --all
+    [ $(git rev-parse --abbrev-ref HEAD) = "$ref" ] || run git checkout "$ref"
+
+    if git rev-list --left-right ${branch}...origin/${ref} -- 2>/dev/null >"$tmpfile"; then
+        LEFT_AHEAD=$(grep -c '^<' "$tmpfile")
+        RIGHT_AHEAD=$(grep -c '^>' "$tmpfile")
+        if [ $LEFT_AHEAD -ne 0 ] || [ $RIGHT_AHEAD -ne 0 ]; then
+            echo "${repo} | ${branch} (ahead $LEFT_AHEAD) | (behind $RIGHT_AHEAD) origin/$ref"
+            run git checkout -B "$branch" --track
+            run git push origin --delete "$branch"
+            run git push origin --update "$branch"
+        fi
+    fi
+    [ -f "$tmpfile" ] && rm "$tmpfile"   
+}
+
+#---------------------------------------------------------------------------------------------- 
+function run()
+{
+    [ $DEBUG -ne 0 ] && echo -e "${grey}${*}$reset"
+    eval $@
+}
+
+#---------------------------------------------------------------------------------------------- 
+#
+#       MAIN
+#
+#---------------------------------------------------------------------------------------------- 
+
+declare -r DEBUG=${DEBUG:-1}    # set to 0 if you do not wish to see native 'git' commands
+declare -r MASTER=master
+declare -r grey='\e[90m'
+declare -r reset='\e[0m'
+declare -r progname="$( basename "${BASH_SOURCE[0]}" )" 
+
+declare -r longOpts='help,Help,HELP,reference'
+declare -r shortOpts='Hhr'
+declare -r options=$(getopt --longoptions "$longOpts" --options "$shortOpts" --name "$progname" -- "$@") || usage
+eval set -- "$options"
+
+declare -A opts=()
+declare -i i=0
+while [ $# -gt 0 ]; do
+    case "${1:-}" in
+        -h|--h|--help|-help)  usage;;
+        -H|--H|--HELP|-HELP)  usage;;
+        --Help|-Help)         usage;;
+        -r|--r|--reference)   opts['reference']='master'; shift;;
+        --)                   shift; break;;
+    esac
+done
+
+declare branch
+
+# verify our args : default arguments when nothing specified
+case $# in
+    0) branch=$(git rev-parse --abbrev-ref HEAD);;
+    1) branch=$1; shift;;
+    2) [ "${opts['reference']:-}" ] && opts['reference']=$1; branch=$2; shift 2;;
+esac
+if [ $# -new 0 ]; then
+    echo 'Invalid args passed
+    exit 1
+fi
+[ -z "${opts['reference']:-}" ] && opts['reference']='master'
+
+
+
+declare repo="$(basename "$(git remote get-url origin)")" 
+
+# do our stuff
+update "$repo" "$branch" "${opts['reference']}"
