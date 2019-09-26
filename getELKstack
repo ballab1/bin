@@ -1,6 +1,6 @@
 #!/bin/bash
 
-declare version=${1:-7.2.0}
+declare version=${1:-7.3.2}
 
 function getImage()
 {
@@ -8,10 +8,10 @@ function getImage()
     local -r registry_server=${REGISTRY_SERVER:-ubuntu-s2:5000}
 
     [ "$(docker image ls -q $image)" ] || docker pull "$image"
-    docker tag "$image" "${registry_server}/${image##*/}"
+    docker tag "$image" "${registry_server}/thirdparty/${image##*/}"
     docker rmi "$image"
-    docker push "${registry_server}/${image##*/}"
-    docker rmi "${registry_server}/${image##*/}"
+    docker push "${registry_server}/thirdparty/${image##*/}"
+    docker rmi "${registry_server}/thirdparty/${image##*/}"
 }
 
 getImage docker.elastic.co/elasticsearch/elasticsearch:$version
