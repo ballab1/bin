@@ -4,7 +4,7 @@ declare -r DC_COMPOSE_VER=1.23.1
 
 function exposeDockerRestAPI() {
     echo 'Exposing docker REST API'
-    sed -iE 's|^ExecStart=/usr/bin/dockerd.*$|ExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:4243 /lib/systemd/system/docker.service
+    sed -iE 's|^ExecStart=/usr/bin/dockerd.*$|ExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:4243|' /lib/systemd/system/docker.service
     systemctl daemon-reload
     systemctl restart docker
 }
@@ -69,9 +69,9 @@ EOF
 
 function mkdirJenkinsSlaveFolders() {
     echo 'maked directories for Jenkins Slaves'
-    mkdir -p /home/jenkins-s3
-    mkdir -p /home/jenkins-s4
-    chown bobb:bobb /home/jenkins-s3 /home/jenkins-s4
+    mkdir -p /home/jenkins.s3
+    mkdir -p /home/jenkins.s4
+    chown bobb:bobb /home/jenkins.s3 /home/jenkins.s4
 }
 
 function redirectOwnBashFiles() {
@@ -92,7 +92,8 @@ function requiredPackages() {
     apt-get install -y build-essential nfs-common nfs-kernel-server tasksel libxml2 libxml2-dev
     apt-get install -y python-pip openjdk-8-jre-headless cifs-utils
     apt-get install -y librdkafka++1 librdkafka1 python-confluent-kafka
-    apt-get install -y docker-compose jq webmin
+    apt-get install -y docker-compose jq
+    apt-get install -y webmin
 }
 
 function saveDefaultDockerCompose() {
@@ -109,6 +110,7 @@ function saveDefaultDockerCompose() {
 }
 
 function setupRegistryAccess() {
+    mkdir -p /etc/docker
     echo '{ "insecure-registries":["ubuntu-s2:5000"] }' > /etc/docker/daemon.json
     systemctl restart docker
 }
@@ -116,15 +118,19 @@ function setupRegistryAccess() {
 function updateHosts() {
     echo 'Updating /etc/hosts'
     cat << EOF >> /etc/hosts
+127.0.0.1       localhost.localdomain   localhost
+192.168.100.1   cable-modem
+192.168.1.1     fios-modem
 10.1.3.1        router
+10.1.3.2        hp55b726 printer
+10.1.3.3        ballantyne
 10.1.3.5        wdmycloud
-10.1.3.11       ubuntu-s1
-10.1.3.12       ubuntu-s2
 10.1.3.6        ubuntu-s3
 10.1.3.10       ubuntu-s4
+10.1.3.11       ubuntu-s1
+10.1.3.12       ubuntu-s2
 10.1.3.14       ubuntu-s5
 10.1.3.15       ubuntu-s6
-192.168.100.1   cable-modem
 EOF
 }
 
@@ -157,9 +163,9 @@ function updateUsersAndGroups() {
 
 usage() {
     echo
-    echo "$0 -  available functions:"
+    echo "$PROGNAME -  available functions:"
     local -a methods
-    mapfile -t methods < <( grep -R '^function' ~/bin/systemSetup | sort | sed -r 's|function (.+)\s*\(.+$|\1|' )
+    mapfile -t methods < <( grep -R '^function' "${PROGRAM_DIR}/systemSetup" | sort | sed -r 's|function (.+)\s*\(.+$|\1|' )
     printf '    %s\n' "${methods[@]}"
     echo
 }
@@ -175,7 +181,8 @@ IFS=$'\n\t'
 [ ! -e ~/bin/trap.bashlib ] || source ~/bin/trap.bashlib
 
 export PATH=~/bin:$PATH
-
+declare -r PROGNAME="$( basename "${BASH_SOURCE[0]}" )"
+declare -r PROGRAM_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" 
 
 if [ $# -eq 0 ]; then
     usage
@@ -185,7 +192,7 @@ else
         if [ "$arg" = 'redirectOwnBashFiles' ] || [ $EUID -eq 0 ]; then
             "$arg"
         else
-            sudo --preserve-env --set-home $0 "$arg"
+            sudo --preserve-env --set-home "$0" "$arg"
         fi
     done
 fi

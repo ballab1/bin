@@ -1,0 +1,5 @@
+#!/bin/bash
+
+for f in $(sudo find /proc -maxdepth 2 -name stat -type f); do
+    sudo awk '{if ($3 == "D" ) {print FILENAME ": " $1 " " $2 " " $3}}' $f
+done 2>/dev/null
