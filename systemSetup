@@ -2,6 +2,13 @@
 
 declare -r DC_COMPOSE_VER=1.23.1
 
+function addSudoers() {
+    echo 'Add user to sudoers'
+    cat << EOF > /etc/sudoers.d/myOverrides
+bobb      ALL=(ALL:ALL) NOPASSWD:  ALL
+EOF
+}
+
 function exposeDockerRestAPI() {
     echo 'Exposing docker REST API'
     sed -iE 's|^ExecStart=/usr/bin/dockerd.*$|ExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:4243|' /lib/systemd/system/docker.service
@@ -87,6 +94,7 @@ function redirectOwnBashFiles() {
 }
 
 function requiredPackages() {
+    echo 'Setting up required packages'
     add-apt-repository universe
     apt-get update
     apt-get install -y build-essential nfs-common nfs-kernel-server tasksel libxml2 libxml2-dev
@@ -97,6 +105,7 @@ function requiredPackages() {
 }
 
 function saveDefaultDockerCompose() {
+    echo 'Updating docker-compose to v'"$DC_COMPOSE_VER"
     local -r compose="$(which docker-compose)"
     [ "$compose" ] || return 0
     local -r dc_compose_ver=$(docker-compose --version | awk '{ print substr($3,0,length($3)-1)}')
@@ -110,6 +119,7 @@ function saveDefaultDockerCompose() {
 }
 
 function setupRegistryAccess() {
+    echo 'Updating /etc/docker/daemon.json'
     mkdir -p /etc/docker
     echo '{ "insecure-registries":["ubuntu-s2:5000"] }' > /etc/docker/daemon.json
     systemctl restart docker
