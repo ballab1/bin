@@ -78,6 +78,10 @@ function systemSetup.06_getLatestDockerCompose() {
 }
 
 function systemSetup.07_jenkinsSlaveFolders() {
+    if [ -z ${myUID:-} ]; then
+        echo 'need to run this from non-user'
+        return 0
+    fi
     [[ -d /home/jenkins.s3 && -d /home/jenkins.s4 ]] && return 0
 
     echo 'make directories for Jenkins Slaves'
@@ -110,6 +114,11 @@ function systemSetup.08_setupRegistryAccess() {
 }
 
 function systemSetup.09_updatePerlSupport() {
+    false || return 0    # skip this
+    if [[ -z ${myUID:-} || -z ${myGIT:-} || -z ${myHOME:-} ]]; then
+        echo 'need to run this from non-user'
+        return 0
+    fi
     [ -d "${myHOME}/.cpan" ] && return 0
     echo 'Adding needed PERL modules'
     systemSetup.run "cpan -i XML::LibXML <<< $(echo 'yes')"
@@ -117,6 +126,10 @@ function systemSetup.09_updatePerlSupport() {
 }
 
 function systemSetup.10_getGitRepos() {
+    if [[ -z ${myUID:-} || -z ${myGIT:-} || -z ${myHOME:-} ]]; then
+        echo 'need to run this from non-user'
+        return 0
+    fi
     local -A repos=(["${myHOME}/.enterprise"]='https://github.com/ballab1/enterprise-config-for-git ballab1'
                     ["${myHOME}/.work"]='https://github.com/ballab1/work-stuff'
                     ["${myHOME}/GIT/other/git-submodule-tools"]='https://github.com/ballab1/git-submodule-tools'
@@ -171,6 +184,14 @@ function systemSetup.11_redirectOwnBashFiles() {
 }
 
 function systemSetup.12_unencryptRepos() {
+    if [ ! -e $CRYP_SECRET ]; then
+        echo 'need to obtain secret key before running'
+        return 0
+    fi
+    if [[ -z ${myUID:-} || -z ${myGIT:-} ]]; then
+        echo 'need to run this from non-user'
+        return 0
+    fi
     local -a repoDirs=("${myHOME}/.inf"
                        "${myHOME}/.work"
                        "${myHOME}/.ssh"
@@ -193,6 +214,10 @@ function systemSetup.12_unencryptRepos() {
 }
 
 function systemSetup.13_updateHosts() {
+    if [ ! -e "${myHOME}/.inf/hosts" ]; then
+        echo 'need to run this from non-user'
+        return 0
+    fi
     local target=/etc/hosts
     [ "$(grep -scE 'ubuntu-s' "$target")" -lt 6 ] && return 0
 

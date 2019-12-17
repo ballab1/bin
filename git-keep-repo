@@ -1,0 +1,14 @@
+#!/bin/bash
+
+git checkout master
+git keep
+
+git checkout dev
+git reset --hard master
+git push -f
+
+git checkout --detach origin/master
+git br -D master
+git br -D dev
+git log --graph --abbrev-commit --decorate --all -n 16 \
+        --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(bold yellow)%d%C(reset)'
