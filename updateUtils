@@ -1,0 +1,51 @@
+#!/bin/bash
+#############################################################################
+#
+#   update utilities
+#
+#############################################################################
+
+declare -a dirs
+
+cd ~
+
+echo
+echo -en '\e[97mfinding "bashlib" directories\e[0m'
+mapfile -t dirs < <( sudo find . -name docker.bashlib -type f | xargs dirname )
+echo ":  ${#dirs[*]} found"
+echo
+for dir in "${dirs[@]}"; do
+    echo "Entering $dir"
+    pushd "$dir" > /dev/null
+    git fetch --all
+    git checkout --detach origin/master
+    popd > /dev/null
+    echo
+done
+
+echo
+echo -en '\e[97mfinding "utilities" directories\e[0m'
+mapfile -t dirs < <( sudo find . -name docker-utilities -type f | xargs dirname )
+echo ": ${#dirs[*]} found"
+echo
+for dir in "${dirs[@]}"; do
+    echo "Entering $dir"
+    pushd "$dir" > /dev/null
+    git fetch --all
+    git checkout --detach origin/master
+    popd > /dev/null
+    echo
+done
+
+echo
+echo -en '\e[97mfinding "parent" directories\e[0m'
+mapfile -t dirs < <( sudo find . -name docker-utilities -type f | xargs dirname | xargs dirname )
+echo ": ${#dirs[*]} found"
+for dir in "${dirs[@]}"; do
+    [ -e "${dir}/.git" ] || continue
+    echo "Entering $dir"
+    pushd "$dir" > /dev/null
+    git keep
+    popd > /dev/null
+    echo
+done

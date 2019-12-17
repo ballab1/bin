@@ -1,116 +1,308 @@
 #!/bin/bash
 
 declare -r DC_COMPOSE_VER=1.23.1
+declare -r CRYP_SECRET=~/.crypt-key
 
-function addSudoers() {
-    echo 'Add user to sudoers'
-    cat << EOF > /etc/sudoers.d/myOverrides
+function systemSetup.ALL() {
+    local method
+    for method in "$(systemSetup.functions | grep -E '\d' | LC_ALL=C sort)"; do
+        {
+            echo
+            echo "systemSetup.${method//. /_}"
+        } >&2
+        systemSetup.${method//. /_}
+    done
+}
+
+function systemSetup.01_addSudoers() {
+    local target=/etc/sudoers.d/myOverrides
+    [ -f "$target" ] && return 0 
+
+    echo "Add user to $target"
+    cat << EOF > "$target"
 bobb      ALL=(ALL:ALL) NOPASSWD:  ALL
 EOF
 }
 
-function exposeDockerRestAPI() {
+function systemSetup.02_requiredPackages() {
+    echo 'Setting up required packages'
+    add-apt-repository universe
+    apt-get update
+    systemSetup.run apt-get install -y build-essential nfs-common nfs-kernel-server tasksel libxml2 libxml2-dev
+    systemSetup.run apt-get install -y python-pip openjdk-8-jre-headless cifs-utils
+    systemSetup.run apt-get install -y librdkafka++1 librdkafka1 python-confluent-kafka
+    systemSetup.run apt-get install -y docker-compose jq
+}
+
+function systemSetup.03_installWebAdmin() {
+    [ "$(grep -sc 'webmin.com' /etc/apt/sources.list)" -ne 0 ] && return 0
+
+    echo 'Installing webadmin'
+    wget -qO- http://www.webmin.com/jcameron-key.asc | sudo apt-key add
+    systemSetup.run add-apt-repository "deb http://download.webmin.com/download/repository sarge contrib"
+    systemSetup.run apt update
+    systemSetup.run apt install -y webmin
+}
+
+function systemSetup.04_installGitLFS() {
+    git lfs version &> /dev/null && return 0 
+
+    echo 'install Git-LFS support'
+    curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
+    systemSetup.run apt-get install git-lfs
+    systemSetup.run git lfs install
+}
+
+function systemSetup.05_exposeDockerRestAPI() {
+    local target=/lib/systemd/system/docker.service
+    [ "$(grep -sc 'tcp://0.0.0.0:4243' "$target")" -gt 0 ] && return 0 
+
     echo 'Exposing docker REST API'
-    sed -iE 's|^ExecStart=/usr/bin/dockerd.*$|ExecStart=/usr/bin/dockerd -H fd:// -H tcp://0.0.0.0:4243|' /lib/systemd/system/docker.service
-    systemctl daemon-reload
+    echo -e '\e[93msed -iE '"'"'s|^(ExecStart=/usr/bin/dockerd -H fd://)(.*)$|\1 -H tcp://0.0.0.0:4243\2|'"' $target"'\e[0m'
+    sed -i -E 's|^(ExecStart=/usr/bin/dockerd -H fd://)(.*)$|\1 -H tcp://0.0.0.0:4243\2|' "$target"
+    usermod --append --groups docker "${myUID}"
+    systemSetup.run systemctl daemon-reload
+    systemSetup.run systemctl restart docker
+}
+
+function systemSetup.06_getLatestDockerCompose() {
+    local target="/usr/local/bin/docker-compose.$DC_COMPOSE_VER"
+    [ -f "$target" ] && return 0 
+
+    echo "get docker-compose v$DC_COMPOSE_VER"
+    systemSetup.run systemSetup.saveDefaultDockerCompose || return 0; 
+    echo 'Downloading latest docker-compose'
+    systemSetup.run curl -L "https://github.com/docker/compose/releases/download/${DC_COMPOSE_VER}/docker-compose-$(uname -s)-$(uname -m)" -o "$target"
+    chmod 755 "$target"
+    systemSetup.run ln -s "$target" /usr/bin/docker-compose
+}
+
+function systemSetup.07_jenkinsSlaveFolders() {
+    [[ -d /home/jenkins.s3 && -d /home/jenkins.s4 ]] && return 0
+
+    echo 'make directories for Jenkins Slaves'
+    systemSetup.run mkdir -p /home/jenkins.s3 ||:
+    systemSetup.run mkdir -p /home/jenkins.s4 ||:
+    chown "${myUID}:$myGID" /home/jenkins.s3 /home/jenkins.s4
+}
+
+function systemSetup.08_setupRegistryAccess() {
+    local daemonFile='/etc/docker/daemon.json'
+
+    mkdir -p "$(dirname "$daemonFile")" ||:
+    if [ ! -f "$daemonFile" ]; then
+        echo "Updating $daemonFile"
+        echo '{ "insecure-registries":["ubuntu-s2:5000"] }' > "${daemonFile}.tmp"
+
+    elif [ "$(jq 'has("insecure-registries")')" != 'true' ]; then
+        echo "Updating $daemonFile"
+        jq '. + { "insecure-registries":["ubuntu-s2:5000"] }' "$daemonFile" > "${daemonFile}.tmp"
+
+    elif [ "$(jq '."insecure-registries"[]|contains( "ubuntu-s2:5000" )' "$daemonFile")" != 'true' ]; then
+        echo "Updating $daemonFile"
+        jq 'map_values(. +  ["ubuntu-s2:5000"] )' "$daemonFile" > "${daemonFile}.tmp"
+
+    else
+        return 0
+    fi
+    jq '.' "${daemonFile}.tmp" > "$daemonFile"
     systemctl restart docker
 }
 
-function getLatestDockerCompose() {
-    echo 'get the latest Docker-compose'
-    saveDefaultDockerCompose || return 0; 
-    echo 'Downloading latest docker-compose'
-    curl -L "https://github.com/docker/compose/releases/download/${DC_COMPOSE_VER}/docker-compose-$(uname -s)-$(uname -m)" -o "/usr/local/bin/docker-compose.$DC_COMPOSE_VER"
-    chmod 755 "/usr/local/bin/docker-compose.$DC_COMPOSE_VER"
-    ln -s "/usr/local/bin/docker-compose.$DC_COMPOSE_VER" /usr/bin/docker-compose
+function systemSetup.09_updatePerlSupport() {
+    [ -d "${myHOME}/.cpan" ] && return 0
+    echo 'Adding needed PERL modules'
+    systemSetup.run "cpan -i XML::LibXML <<< $(echo 'yes')"
+    chown "${myUID}:$myGID" -R "${myHOME}/.cpan"
 }
 
-function installGitLFS() {
-    echo 'install Git-LFS support'
-    curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
-    sudo apt-get install git-lfs
-    git lfs install
+function systemSetup.10_getGitRepos() {
+    local -A repos=(["${myHOME}/.enterprise"]='https://github.com/ballab1/enterprise-config-for-git ballab1'
+                    ["${myHOME}/.work"]='https://github.com/ballab1/work-stuff'
+                    ["${myHOME}/GIT/other/git-submodule-tools"]='https://github.com/ballab1/git-submodule-tools'
+                    ["${myHOME}/.inf"]='https://github.com/ballab1/secrets'
+                    ["${myHOME}/.tmux"]='https://github.com/ballab1/tmux_config'
+                    ["${myHOME}/.ssh"]='https://github.com/ballab1/common_ssh_config'
+                   )
+    local -i isDone=0
+    local dir
+    for dir in "${!repos[@]}"; do
+        [ -d "$dir" ] || isDone=1
+    done
+    [ $isDone -eq 0 ] && return 0 
+
+    echo 'setting up standard GIT repos'
+    local -a repoInfo
+    for dir in "${!repos[@]}"; do
+        [ -d "$dir" ] && rm -rf "$dir"
+        unset repoInfo
+        mapfile -t repoInfo < <(echo ${repos["$dir"]} | awk '{print $0}' RS=' ')
+        if [ ${#repoInfo[*]} -gt 1 ] && [ "${repoInfo[1]}" ]; then
+            systemSetup.run git clone --recurse-submodules -b "${repoInfo[1]}" "${repoInfo[0]}" "$dir"
+        else
+            systemSetup.run git clone --recurse-submodules "${repoInfo[0]}" "$dir"
+        fi
+        chown "${myUID}:$myGID" -R "$dir" "$dir"/.*
+    done
+}
+
+function systemSetup.11_redirectOwnBashFiles() {
+    local -A symlinks=(["${myHOME}/.bash_aliases"]="${myHOME}/.bin/bash_aliases"
+                       ["${myHOME}/.bash_logout"]="${myHOME}/.bin/bash_logout"
+                       ["${myHOME}/.bashrc"]="${myHOME}/.bin/bashrc"
+                       ["${myHOME}/.gitconfig"]="${myHOME}/.bin/gitconfig"
+                       ["${myHOME}/.tmux.conf"]="${myHOME}/.bin/tmux.conf"
+                       ['/usr/local/bin/git-crypt']="${myHOME}/.bin/$(uname -p)/git-crypt"
+                      )
+    local -i isDone=0
+    local link
+    for link in "${!symlinks[@]}"; do
+        [ -e "$(stat --format='%N' "$link" | awk '{gsub("'"'"'","",$3); print $3}')" ] && continue
+        isDone=1
+    done
+    [ $isDone -eq 0 ] && return 0 
+
+    echo 'Redirect own BASH files'
+    for link in "${!symlinks[@]}"; do
+        stat --format='%i' "$link" &> /dev/null && rm "$link"
+        systemSetup.run ln -s "${symlinks[$link]}" "${link}"
+        chown "${myUID}:$myGID" "$link"
+    done
+}
+
+function systemSetup.12_unencryptRepos() {
+    local -a repoDirs=("${myHOME}/.inf"
+                       "${myHOME}/.work"
+                       "${myHOME}/.ssh"
+                      )
+
+    local dir
+    for dir in "${repoDirs[@]}"; do
+        pushd "$dir"
+        git-crypt unlock "$CRYP_SECRET"
+        popd
+        chown -R "${myUID}:$myGID" "$dir"
+    done
+
+    systemSetup.verifyPermisions 755 "$myHOME"
+    systemSetup.verifyPermisions 700 "${myHOME}/.ssh"
+    systemSetup.verifyPermisions 600 "${myHOME}/.ssh/authorized_keys"
+    systemSetup.verifyPermisions 600 "${myHOME}/.ssh/id_rsa"
+    systemSetup.verifyPermisions 644 "${myHOME}/.ssh/id_rsa.pub"
+    systemSetup.verifyPermisions 644 "${myHOME}/.ssh/known_hosts"  
+}
+
+function systemSetup.13_updateHosts() {
+    local target=/etc/hosts
+    [ "$(grep -scE 'ubuntu-s' "$target")" -lt 6 ] && return 0
+
+    echo "Updating $target"
+    cp "${myHOME}/.inf/hosts" /etc/hosts
+}
+
+function systemSetup.14_updateUsersAndGroups() {
+    echo 'Updating users and groups'
+
+    [ "$(getent passwd www-data)" ] || systemSetup.run usermod  --uid 82 www-data
+    systemSetup.run groupmod --gid 82 www-data
+    [ "$(getent group mysql)" ] || systemSetup.run groupadd --gid 909 mysql
+
+    [ "$(getent group nginx)" ] || systemSetup.run groupadd --gid 1001 nginx
+    [ "$(getent passwd nginx)" ] || systemSetup.run useradd --no-create-home --gid 1001 --uid 1001 --shell /sbin/nologin nginx  
+
+    [ "$(getent group nagios)" ] || systemSetup.run groupadd --gid 1002 nagios
+    [ "$(getent passwd nagios)" ] || systemSetup.run useradd --no-create-home --gid 1002 --uid 1002 --shell /sbin/nologin nagios 
+
+    [ "$(getent group jenkins)" ] || systemSetup.run groupadd --gid 1003 jenkins
+    [ "$(getent passwd jenkins)" ] || systemSetup.run useradd --no-create-home --gid 1003 --uid 1003 --shell /sbin/nologin jenkins
+
+    [ "$(getent group webdav)" ] || systemSetup.run groupadd --gid 2222 webdav
+    [ "$(getent passwd webdav)" ] || systemSetup.run useradd --no-create-home --gid 2222 --uid 2222 --shell /sbin/nologin webdav 
+
+    systemSetup.run usermod --groups docker,jenkins,nginx,nagios,www-data,webdav bobb
 }
 
 
-function networkMounts() {
+function systemSetup.15_networkMounts() {
+    local target=/etc/fstab
+    [[ "$(grep -scE '\s+/mnt/(WDMyCloud|Seagate|Guest)\s+' "$target")" -eq 3 && \
+       -d /mnt/WDMyCloud && \
+       -d /mnt/Seagate && \
+       -d /mnt/Guest && \
+       -d /home/bobb/src && \
+       -d /home/bobb/xsrc ]] && return 0
+
+
     echo 'Setting up mounts for network shares'
-    [ -d /mnt/WDMyCloud ] || sudo mkdir -p /mnt/WDMyCloud
-    [ -d /mnt/Seagate ] || sudo mkdir -p /mnt/Seagate
-    [ -d /mnt/Guest ] || sudo mkdir -p /mnt/Guest
-    [ -d /home/bobb/src ] || mkdir -p /home/bobb/src
-    [ -d /home/bobb/xsrc ] || mkdir -p /home/bobb/xsrc
+    [ -d /mnt/WDMyCloud ] || mkdir -p /mnt/WDMyCloud ||:
+    [ -d /mnt/Seagate ] || mkdir -p /mnt/Seagate ||:
+    [ -d /mnt/Guest ] || mkdir -p /mnt/Guest ||:
+    [ -d /home/bobb/src ] || mkdir -p /home/bobb/src ||:
+    [ -d /home/bobb/xsrc ] || mkdir -p /home/bobb/xsrc ||:
 
-cat << EOF >> /etc/fstab
+    cat << EOF >> "$target"
 #
 10.1.3.5:/nfs /mnt/WDMyCloud nfs
-//10.1.3.5/WDMyCloud/Seagate_Expansion_Drive /mnt/Seagate cifs credentials=/home/bobb/.inf/10.1.3.1.smb
+//10.1.3.5/Seagate_Expansion_Drive /mnt/Seagate cifs credentials=/home/bobb/.inf/10.1.3.5.smb
 //10.1.3.5/Guest /mnt/Guest cifs credentials=/home/bobb/.inf/10.1.3.5.smb
 #
 /mnt/Guest/ubuntu /home/bobb/src        none    bind
 /mnt/Seagate/ubuntu /home/bobb/xsrc     none    bind
 EOF
-    mount -a
+    mount -a ||:
 }
 
-function other() {
-    echo 'other'
-    cat << EOF
-    # set environment vars for passwrds etc
-    # set .ssh for keyless login
-    # set correct ssh for Jenkins access to GITHUB to update config
-    # modify /etc/sudoers.d/myOverrides to permit NOPASSWD access by bobb
-    # update '.ssh/known_hosts' on all systems
-
-    # install enterprise for GIT
-    # install ~/GIT folders  (
-    # add       /usr/local/bin/git-crypt
-    # update samba config
-    # tasksel install samba-server
-EOF
-    [ -e ~/.tmux/tmp ] && rm ~/.tmux/tmp
-    mkdir -p ~/.tmux/tmp
-    chmod 777 -R ~/.tmux/tmp
+function systemSetup.functions() {
+    # list all user functions
+    grep -R '^function' "${PROGRAM_DIR}/$PROGNAME" \
+    | sed -re 's|^function systemSetup.(.+)\s*\(.+$|\1|' \
+    | grep -vE '^(functions|getFunction|run|saveDefaultDockerCompose|showEnvironment|usage|verifyPermisions)$' \
+    | sed -E 's|_|. |g' \
+    | LC_ALL=C sort
 }
 
+function systemSetup.getFunction() {
+    
+    local -a functions
+    mapfile -t functions < <(systemSetup.functions ||:)
 
-function mkdirJenkinsSlaveFolders() {
-    echo 'maked directories for Jenkins Slaves'
-    mkdir -p /home/jenkins.s3
-    mkdir -p /home/jenkins.s4
-    chown bobb:bobb /home/jenkins.s3 /home/jenkins.s4
+    local arg
+    local -a results
+
+    # verify args
+    for arg in "$@"; do
+        mapfile -t results < <(printf '%s\n' "${functions[@]}" | grep "$arg" ||:)
+        if [ ${#results[*]} -ne 1 ]; then
+             echo 'Invalid arguments'
+             return 0
+        fi
+    done
+
+    # run args
+    for arg in "$@"; do
+        mapfile -t results < <(printf '%s\n' "${functions[@]}" | grep "$arg" ||:)
+        echo "systemSetup.${results[0]//. /_}"
+        systemSetup.${results[0]//. /_}
+    done
 }
 
-function redirectOwnBashFiles() {
-    echo 'Redirect own BASH files'
-    [ -e ~/.bash_aliases ] && rm ~/.bash_aliases
-    ln -s ~/bin/bash_aliases ~/.bash_aliases
-    [ -e ~/.bash_logout ] && rm ~/.bash_logout
-    ln -s ~/bin/bash_logout ~/.bash_logout
-    [ -e ~/.bashrc ] && rm ~/.bashrc
-    ln -s ~/bin/bashrc ~/.bashrc
-    [ -e ~/.gitconfig ] && rm ~/.gitconfig
-    ln -s ~/bin/gitconfig ~/.gitconfig
+function systemSetup.run() {
+    printf '\e[93m%s\e[0m\n' $(IFS=' ' echo $*)
+    if [ ${DEBUG:-0} -eq 0 ]; then
+        eval $@ > /dev/null
+    else
+        eval $@
+    fi
 }
 
-function requiredPackages() {
-    echo 'Setting up required packages'
-    add-apt-repository universe
-    apt-get update
-    apt-get install -y build-essential nfs-common nfs-kernel-server tasksel libxml2 libxml2-dev
-    apt-get install -y python-pip openjdk-8-jre-headless cifs-utils
-    apt-get install -y librdkafka++1 librdkafka1 python-confluent-kafka
-    apt-get install -y docker-compose jq
-    apt-get install -y webmin
-}
-
-function saveDefaultDockerCompose() {
-    echo 'Updating docker-compose to v'"$DC_COMPOSE_VER"
-    local -r compose="$(which docker-compose)"
+function systemSetup.saveDefaultDockerCompose() {
+    local -r compose="$(command -v docker-compose)"
     [ "$compose" ] || return 0
-    local -r dc_compose_ver=$(docker-compose --version | awk '{ print substr($3,0,length($3)-1)}')
-    [ "$DC_COMPOSE_VER" = "$dc_compose_ver" ] && return 1
 
+    local -r dc_compose_ver=$(docker-compose --version | awk '{ print substr($3,0,length($3)-1)}')
+    [ "$DC_COMPOSE_VER" = "$dc_compose_ver" ] && return 0
+
+    echo 'Updating docker-compose to v'"$DC_COMPOSE_VER"
     if [ ! -h "$compose" ]; then
         echo 'Saving default docker-compose'
         [ -e "/usr/local/bin/docker-compose.$dc_compose_ver" ] || mv "$compose" "/usr/local/bin/docker-compose.$dc_compose_ver"
@@ -118,91 +310,65 @@ function saveDefaultDockerCompose() {
     [ ! -e /usr/bin/docker-compose ] || rm /usr/bin/docker-compose
 }
 
-function setupRegistryAccess() {
-    echo 'Updating /etc/docker/daemon.json'
-    mkdir -p /etc/docker
-    echo '{ "insecure-registries":["ubuntu-s2:5000"] }' > /etc/docker/daemon.json
-    systemctl restart docker
+function systemSetup.showEnvironment() {
+    env
 }
 
-function updateHosts() {
-    echo 'Updating /etc/hosts'
-    cat << EOF >> /etc/hosts
-127.0.0.1       localhost.localdomain   localhost
-192.168.100.1   cable-modem
-192.168.1.1     fios-modem
-10.1.3.1        router
-10.1.3.2        hp55b726 printer
-10.1.3.3        ballantyne
-10.1.3.5        wdmycloud
-10.1.3.6        ubuntu-s3
-10.1.3.10       ubuntu-s4
-10.1.3.11       ubuntu-s1
-10.1.3.12       ubuntu-s2
-10.1.3.14       ubuntu-s5
-10.1.3.15       ubuntu-s6
-EOF
-}
-
-function updatePerlSupport() {
-    echo 'Adding needed PERL modules'
-    cpan -i XML::LibXML
-}
-
-function updateUsersAndGroups() {
-    echo 'Updating users and groups'
-
-    usermod  -u 82 www-data
-    groupmod -g 82 www-data
-    groupadd --gid  999 mysql
-
-    groupadd --gid 1001 nginx
-    useradd --no-create-home --gid 1001 --uid 1001 --shell /sbin/nologin nginx  
-
-    groupadd --gid 1002 nagios
-    useradd --no-create-home --gid 1002 --uid 1002 --shell /sbin/nologin nagios 
-
-    groupadd --gid 1003 jenkins
-    useradd --no-create-home --gid 1003 --uid 1003 --shell /sbin/nologin jenkins
-
-    groupadd --gid 2222 webdav
-    useradd --no-create-home --gid 2222 --uid 2222 --shell /sbin/nologin webdav 
-
-    usermod -G docker,jenkins,nginx,nagios,www-data,webdav bobb
-}
-
-usage() {
+function systemSetup.usage() {
     echo
     echo "$PROGNAME -  available functions:"
     local -a methods
-    mapfile -t methods < <( grep -R '^function' "${PROGRAM_DIR}/systemSetup" | sort | sed -r 's|function (.+)\s*\(.+$|\1|' )
+    mapfile -t methods < <(systemSetup.functions)
     printf '    %s\n' "${methods[@]}"
     echo
 }
 
-##################################################################################################
+function systemSetup.verifyPermisions()
+{
+    local perms="${1:?}"
+    local file="${2:?}"
 
+    if [ "$(stat --format '%a %u:%g' "$file")" != "${perms} ${myUID}:$myGID" ]; then
+        echo -n "fixing '$file':: was $(stat --format '%A %U:%G' "$file")" 
+        sudo chown "${myUID}:$myGID" "$file"
+        sudo chmod "$perms" "$file"
+        echo "  is now $(stat --format '%A %U:%G' "$file")"
+        echo
+        echo
+    fi
+}
+
+##################################################################################################
+#
+#      MAIN
+#
+##################################################################################################
 
 # Use the Unofficial Bash Strict Mode
 set -o errexit
 set -o nounset
 set -o pipefail
 IFS=$'\n\t'
-[ ! -e ~/bin/trap.bashlib ] || source ~/bin/trap.bashlib
 
-export PATH=~/bin:$PATH
-declare -r PROGNAME="$( basename "${BASH_SOURCE[0]}" )"
+# always run as root
+if [ ${EUID:-0} -ne 0 ]; then
+    export myUID=$(getent passwd $EUID | cut -d: -f3)
+    export myGID=$(getent passwd $EUID | cut -d: -f4) 
+    export myHOME=$(getent passwd $EUID | cut -d: -f6)
+    sudo --preserve-env "$0" "$@"
+    exit
+fi
+
+
+export PATH="${PATH}:${HOME}/.bin"
+declare -r PROGNAME="$(basename "${BASH_SOURCE[0]}")"
 declare -r PROGRAM_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" 
+[ ! -e "${PROGRAM_DIR}/trap.bashlib" ] || source "${PROGRAM_DIR}/trap.bashlib"
 
-if [ $# -eq 0 ]; then
-    usage
+if [ $# -eq 0 ] || [[ "${1,,}" = *help ]] || [[ "${1,,}" = *usage ]]; then
+    systemSetup.usage
 
 else
-    for arg in "$@"; do
-        if [ "$arg" = 'redirectOwnBashFiles' ] || [ $EUID -eq 0 ]; then
-            "$arg"
-        else
-            sudo --preserve-env --set-home "$0" "$arg"
-        fi
-    done
+    systemSetup.getFunction "$@"
 fi
+

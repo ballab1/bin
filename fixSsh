@@ -13,7 +13,9 @@ function verifyPermisions()
         echo -n "fixing '$file':: was $(stat --format '%A %U:%G' "$file")" 
         sudo chown "${myUID}:$myGID" "$file"
         sudo chmod "$perms" "$file"
-        echo "  is now $(stat --format '%A %U:%G' "$file")\n\n" 
+        echo "  is now $(stat --format '%A %U:%G' "$file")"
+        echo
+        echo
     fi
 }
 

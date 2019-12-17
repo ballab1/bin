@@ -2,10 +2,10 @@
 apt-get update
 apt-get install -y apt-transport-https ca-certificates curl software-properties-common
 
-git clone https://github.com/ballab1/bin.git /home/bobb/bin
-chown -R bobb:bobb /home/bobb/bin
+git clone https://github.com/ballab1/bin.git /home/bobb/.bin
+chown -R bobb:bobb /home/bobb/.bin
 
-/home/bobb/bin/systemSetup
+/home/bobb/.bin/systemSetup
 
 # update
 #   timescaledb
@@ -14,13 +14,3 @@ chown -R bobb:bobb /home/bobb/bin
 #this uses SSH, so an ssh key (~/.ssh/id_rsa.pub) has to be present. This has to be uploaded to GITHub for the account used to save the configuration
 
 
-# setting up docker-registry:
-apt-get -y docker-registry
-# then setup where images get stored.
-# either change docker.registry.config.yml:
-#    sed -iE -e 's|\srootdirectory:\s.+$| rootdirectory: /var/lib/docker-registry|' /etc/docker/registry/config.yml
-#or change mount point by adding:
-#root@ubuntu-s2:~# mkdir /media/ext3-d/docker-registry
-#root@ubuntu-s2:~# chown docker-registry:docker-registry /media/ext3-d/docker-registry
-#fstab:
-#    /media/ext3-d/docker-registry /var/lib/docker-registry   none    bind

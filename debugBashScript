@@ -1,5 +1,6 @@
 #!/bin/bash
 
-export PS4='+${BASH_SOURCE}: ${LINENO}: ${FUNCNAME[0]:-}(): '
+export PS4='+\011${BASH_SOURCE[0]}:\011${LINENO[0]}\011${FUNCNAME[0]:-}():\011'
 
-exec "$@" &> debug.log
+echo -e 'depth\tsource\tline #\tfunction\tstatement' > debug.log
+exec "$@" &>> debug.log

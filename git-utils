@@ -1,0 +1,11 @@
+#!/bin/bash
+
+git checkout master
+git keep
+git checkout dev
+git reset --hard master
+git push -f
+git checkout --detach origin/master
+git branch -D master
+git branch -D dev
+git lg1
