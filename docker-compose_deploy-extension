@@ -1,0 +1,8 @@
+#!/bin/bash
+
+declare dc_file
+declare wsdir="workspace.$(basename "$(pwd)")"
+if [[ $(IFS=' ' echo $* | grep -cE ' -f|--file ') -eq 0 && -h deploy && -d "$wsdir" && -f "${wsdir}/docker-compose.yml" ]]; then
+   dc_file="-f ${wsdir}/docker-compose.yml"
+fi
+docker-compose ${dc_file:-} "$@"

@@ -1,0 +1,6 @@
+#!/bin/bash
+
+declare container=$1
+shift
+
+docker exec -t "$container" "$container" "$@"
