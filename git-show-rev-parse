@@ -77,3 +77,7 @@ term.log "$(git rev-parse --show-superproject-working-tree)"'\n' 'yellow'
 term.log 'Show the path to the shared index file in split index mode, or empty if not in split-index mode.\n' 'grey'
 term.log '    git rev-parse --shared-index-path: '
 term.log "$(git rev-parse --shared-index-path)"'\n' 'yellow'
+
+term.log 'A non-ambiguous short name of the objects name. The option core.warnAmbiguousRefs is used to select the strict abbreviation mode.\n' 'grey'
+term.log '    git rev-parse --abbrev-ref HEAD: '
+term.log "$(git rev-parse --abbrev-ref HEAD)"'\n' 'yellow'

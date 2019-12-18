@@ -1,0 +1,12 @@
+#!/bin/bash 
+
+declare -a status
+mapfile -t status < <(git status)
+printf '%s\n' "${status[@]:0:2}"
+
+if [ "$(git submodule)" ]; then
+    echo
+    declare myBranch=$(git rev-parse --abbrev-ref HEAD)
+    git submodule foreach branch-distance | grep ' | '"$myBranch"
+fi
+printf '%s\n' "${status[@]:2}"
