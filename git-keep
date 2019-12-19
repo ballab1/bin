@@ -26,6 +26,14 @@ EOF
 }
 
 #---------------------------------------------------------------------------------------------- 
+function gitMainBranch()
+{
+    local master="$(git config --get core.branch)"
+    [ -z "$master" ] && master='master'
+    echo $master
+}
+
+#---------------------------------------------------------------------------------------------- 
 function history()
 {
     # search and display the history in current local workspace for any previous occasions where 'git-keep' was used
@@ -76,7 +84,7 @@ function verify()
 #---------------------------------------------------------------------------------------------- 
 
 declare -r DEBUG=${DEBUG:-1}    # set to 0 if you do not wish to see native 'git' commands
-declare -r MASTER=master
+declare -r MASTER=$(gitMainBranch)
 declare -r grey='\e[90m'
 declare -r reset='\e[0m'
 declare -r progname="$( basename "${BASH_SOURCE[0]}" )" 

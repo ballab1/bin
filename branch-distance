@@ -9,7 +9,14 @@ fi
 
 declare repo="$(basename "$(git remote get-url origin)")"
 repo="${repo/.git}"
-declare master="${1:-master}"
+
+gitMainBranch() {
+    local master="$(git config --get core.branch)"
+    [ -z "$master" ] && master='master'
+    echo $master
+}
+
+declare master="${1:-$(gitMainBranch)}"
 
 declare -i count=0
 while read -r test_branch; do

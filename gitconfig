@@ -19,7 +19,9 @@
 [core]
     symlinks = true
     editor = vim
+    branch = master
 [url "https://github.com/ballab1"]
     pushInsteadOf = https://github.com/ballab1
 [url "git@github.com/ballab1"]
     pushInsteadOf = git@github.com/ballab1
+   

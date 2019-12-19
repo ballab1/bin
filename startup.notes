@@ -1,11 +1,10 @@
 
 apt-get update
 apt-get install -y apt-transport-https ca-certificates curl software-properties-common
-
-git clone https://github.com/ballab1/bin.git /home/bobb/.bin
+git clone https://github.com/ballab1/bin.git --recurse-submodules /home/bobb/.bin
 chown -R bobb:bobb /home/bobb/.bin
 
-/home/bobb/.bin/systemSetup
+sudo /home/bobb/.bin/systemSetup
 
 # update
 #   timescaledb

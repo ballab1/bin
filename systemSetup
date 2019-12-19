@@ -1,8 +1,5 @@
 #!/bin/bash
 
-declare -r DC_COMPOSE_VER=1.23.1
-declare -r CRYP_SECRET=~/.crypt-key
-
 function systemSetup.ALL() {
     local method
     for method in "$(systemSetup.functions | grep -E '\d' | LC_ALL=C sort)"; do
@@ -39,33 +36,12 @@ function systemSetup.03_installWebAdmin() {
 
     echo 'Installing webadmin'
     wget -qO- http://www.webmin.com/jcameron-key.asc | sudo apt-key add
-    systemSetup.run add-apt-repository "deb http://download.webmin.com/download/repository sarge contrib"
+    add-apt-repository "deb http://download.webmin.com/download/repository sarge contrib"
     systemSetup.run apt update
     systemSetup.run apt install -y webmin
 }
 
-function systemSetup.04_installGitLFS() {
-    git lfs version &> /dev/null && return 0 
-
-    echo 'install Git-LFS support'
-    curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
-    systemSetup.run apt-get install git-lfs
-    systemSetup.run git lfs install
-}
-
-function systemSetup.05_exposeDockerRestAPI() {
-    local target=/lib/systemd/system/docker.service
-    [ "$(grep -sc 'tcp://0.0.0.0:4243' "$target")" -gt 0 ] && return 0 
-
-    echo 'Exposing docker REST API'
-    echo -e '\e[93msed -iE '"'"'s|^(ExecStart=/usr/bin/dockerd -H fd://)(.*)$|\1 -H tcp://0.0.0.0:4243\2|'"' $target"'\e[0m'
-    sed -i -E 's|^(ExecStart=/usr/bin/dockerd -H fd://)(.*)$|\1 -H tcp://0.0.0.0:4243\2|' "$target"
-    usermod --append --groups docker "${myUID}"
-    systemSetup.run systemctl daemon-reload
-    systemSetup.run systemctl restart docker
-}
-
-function systemSetup.06_getLatestDockerCompose() {
+function systemSetup.04_getLatestDockerCompose() {
     local target="/usr/local/bin/docker-compose.$DC_COMPOSE_VER"
     [ -f "$target" ] && return 0 
 
@@ -77,20 +53,7 @@ function systemSetup.06_getLatestDockerCompose() {
     systemSetup.run ln -s "$target" /usr/bin/docker-compose
 }
 
-function systemSetup.07_jenkinsSlaveFolders() {
-    if [ -z ${myUID:-} ]; then
-        echo 'need to run this from non-user'
-        return 0
-    fi
-    [[ -d /home/jenkins.s3 && -d /home/jenkins.s4 ]] && return 0
-
-    echo 'make directories for Jenkins Slaves'
-    systemSetup.run mkdir -p /home/jenkins.s3 ||:
-    systemSetup.run mkdir -p /home/jenkins.s4 ||:
-    chown "${myUID}:$myGID" /home/jenkins.s3 /home/jenkins.s4
-}
-
-function systemSetup.08_setupRegistryAccess() {
+function systemSetup.05_setupRegistryAccess() {
     local daemonFile='/etc/docker/daemon.json'
 
     mkdir -p "$(dirname "$daemonFile")" ||:
@@ -113,9 +76,49 @@ function systemSetup.08_setupRegistryAccess() {
     systemctl restart docker
 }
 
-function systemSetup.09_updatePerlSupport() {
+function systemSetup.06_exposeDockerRestAPI() {
+    local target=/lib/systemd/system/docker.service
+    [ "$(grep -sc 'tcp://0.0.0.0:4243' "$target")" -gt 0 ] && return 0 
+
+    echo 'Exposing docker REST API'
+    echo -e '\e[93msed -iE '"'"'s|^(ExecStart=/usr/bin/dockerd -H fd://)(.*)$|\1 -H tcp://0.0.0.0:4243\2|'"' $target"'\e[0m'
+    sed -i -E 's|^(ExecStart=/usr/bin/dockerd -H fd://)(.*)$|\1 -H tcp://0.0.0.0:4243\2|' "$target"
+    chmod a+rw /run/docker.sock
+    usermod --append --groups docker "${myUID}"
+    systemSetup.run systemctl daemon-reload
+    systemSetup.run systemctl restart docker
+}
+
+function systemSetup.11_installGitLFS() {
+    if [ -z "${myHOME:-}" ] || [ ! -d "${myHOME}/.bin" ]; then
+        echo 'need to run this from non-user'
+        return 0
+    fi
+    git lfs version &> /dev/null && return 0 
+
+    echo 'install Git-LFS support'
+    systemSetup.run curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
+    systemSetup.run apt-get install git-lfs
+    cd "${myHOME}/.bin"
+    systemSetup.run git lfs install
+}
+
+function systemSetup.12_jenkinsSlaveFolders() {
+    if [ -z ${myUID:-} ]; then
+        echo 'need to run this from non-user'
+        return 0
+    fi
+    [[ -d /home/jenkins.s3 && -d /home/jenkins.s4 ]] && return 0
+
+    echo 'make directories for Jenkins Slaves'
+    systemSetup.run mkdir -p /home/jenkins.s3 ||:
+    systemSetup.run mkdir -p /home/jenkins.s4 ||:
+    chown "${myUID}:$myGID" /home/jenkins.s3 /home/jenkins.s4
+}
+
+function systemSetup.13_updatePerlSupport() {
     false || return 0    # skip this
-    if [[ -z ${myUID:-} || -z ${myGIT:-} || -z ${myHOME:-} ]]; then
+    if [[ -z ${myUID:-} || -z ${myGID:-} || -z ${myHOME:-} ]]; then
         echo 'need to run this from non-user'
         return 0
     fi
@@ -125,8 +128,8 @@ function systemSetup.09_updatePerlSupport() {
     chown "${myUID}:$myGID" -R "${myHOME}/.cpan"
 }
 
-function systemSetup.10_getGitRepos() {
-    if [[ -z ${myUID:-} || -z ${myGIT:-} || -z ${myHOME:-} ]]; then
+function systemSetup.14_getGitRepos() {
+    if [[ -z ${myUID:-} || -z ${myGID:-} || -z ${myHOME:-} ]]; then
         echo 'need to run this from non-user'
         return 0
     fi
@@ -159,7 +162,7 @@ function systemSetup.10_getGitRepos() {
     done
 }
 
-function systemSetup.11_redirectOwnBashFiles() {
+function systemSetup.15_redirectOwnBashFiles() {
     local -A symlinks=(["${myHOME}/.bash_aliases"]="${myHOME}/.bin/bash_aliases"
                        ["${myHOME}/.bash_logout"]="${myHOME}/.bin/bash_logout"
                        ["${myHOME}/.bashrc"]="${myHOME}/.bin/bashrc"
@@ -183,12 +186,12 @@ function systemSetup.11_redirectOwnBashFiles() {
     done
 }
 
-function systemSetup.12_unencryptRepos() {
+function systemSetup.16_unencryptRepos() {
     if [ ! -e $CRYP_SECRET ]; then
         echo 'need to obtain secret key before running'
         return 0
     fi
-    if [[ -z ${myUID:-} || -z ${myGIT:-} ]]; then
+    if [[ -z ${myUID:-} || -z ${myGID:-} ]]; then
         echo 'need to run this from non-user'
         return 0
     fi
@@ -213,7 +216,7 @@ function systemSetup.12_unencryptRepos() {
     systemSetup.verifyPermisions 644 "${myHOME}/.ssh/known_hosts"  
 }
 
-function systemSetup.13_updateHosts() {
+function systemSetup.17_updateHosts() {
     if [ ! -e "${myHOME}/.inf/hosts" ]; then
         echo 'need to run this from non-user'
         return 0
@@ -222,10 +225,10 @@ function systemSetup.13_updateHosts() {
     [ "$(grep -scE 'ubuntu-s' "$target")" -lt 6 ] && return 0
 
     echo "Updating $target"
-    cp "${myHOME}/.inf/hosts" /etc/hosts
+    cp "${myHOME}/.inf/hosts" /etc/
 }
 
-function systemSetup.14_updateUsersAndGroups() {
+function systemSetup.18_updateUsersAndGroups() {
     echo 'Updating users and groups'
 
     [ "$(getent passwd www-data)" ] || systemSetup.run usermod  --uid 82 www-data
@@ -244,26 +247,26 @@ function systemSetup.14_updateUsersAndGroups() {
     [ "$(getent group webdav)" ] || systemSetup.run groupadd --gid 2222 webdav
     [ "$(getent passwd webdav)" ] || systemSetup.run useradd --no-create-home --gid 2222 --uid 2222 --shell /sbin/nologin webdav 
 
-    systemSetup.run usermod --groups docker,jenkins,nginx,nagios,www-data,webdav bobb
+    systemSetup.run usermod --groups docker,jenkins,nginx,nagios,www-data,webdav "$myNAME"
 }
 
 
-function systemSetup.15_networkMounts() {
+function systemSetup.19_networkMounts() {
     local target=/etc/fstab
     [[ "$(grep -scE '\s+/mnt/(WDMyCloud|Seagate|Guest)\s+' "$target")" -eq 3 && \
        -d /mnt/WDMyCloud && \
        -d /mnt/Seagate && \
        -d /mnt/Guest && \
-       -d /home/bobb/src && \
-       -d /home/bobb/xsrc ]] && return 0
+       -d "${myHOME}/src" && \
+       -d "${myHOME}/xsrc" ]] && return 0
 
 
     echo 'Setting up mounts for network shares'
     [ -d /mnt/WDMyCloud ] || mkdir -p /mnt/WDMyCloud ||:
     [ -d /mnt/Seagate ] || mkdir -p /mnt/Seagate ||:
     [ -d /mnt/Guest ] || mkdir -p /mnt/Guest ||:
-    [ -d /home/bobb/src ] || mkdir -p /home/bobb/src ||:
-    [ -d /home/bobb/xsrc ] || mkdir -p /home/bobb/xsrc ||:
+    [ -d "${myHOME}/src" ] || mkdir -p "${myHOME}/src" ||:
+    [ -d "${myHOME}/xsrc" ] || mkdir -p "${myHOME}/xsrc" ||:
 
     cat << EOF >> "$target"
 #
@@ -281,7 +284,7 @@ function systemSetup.functions() {
     # list all user functions
     grep -R '^function' "${PROGRAM_DIR}/$PROGNAME" \
     | sed -re 's|^function systemSetup.(.+)\s*\(.+$|\1|' \
-    | grep -vE '^(functions|getFunction|run|saveDefaultDockerCompose|showEnvironment|usage|verifyPermisions)$' \
+    | grep -vE '^(functions|getFunction|getUserInfo|run|saveDefaultDockerCompose|showEnvironment|usage|userInfo|verifyPermisions)$' \
     | sed -E 's|_|. |g' \
     | LC_ALL=C sort
 }
@@ -311,12 +314,17 @@ function systemSetup.getFunction() {
     done
 }
 
+function systemSetup.getUserInfo() {
+    local key=${1:?}
+    (IFS=' ' source "$USER_INFO_FILE" | echo $key)
+}
+
 function systemSetup.run() {
     printf '\e[93m%s\e[0m\n' $(IFS=' ' echo $*)
     if [ ${DEBUG:-0} -eq 0 ]; then
-        eval $@ > /dev/null
+        $@ > /dev/null
     else
-        eval $@
+        $@
     fi
 }
 
@@ -348,6 +356,16 @@ function systemSetup.usage() {
     echo
 }
 
+function systemSetup.userInfo()
+{
+    echo "myNAME=$1"
+    echo "myUID=$3"
+    echo "myGID=$4"
+    echo "myFULLNAME='$5'"
+    echo "myHOME=$6"
+    echo "mySHELL=$7"
+}
+
 function systemSetup.verifyPermisions()
 {
     local perms="${1:?}"
@@ -375,20 +393,24 @@ set -o nounset
 set -o pipefail
 IFS=$'\n\t'
 
+declare -r DC_COMPOSE_VER=1.23.1
+declare -r CRYP_SECRET=~/.crypt-key
+declare -r USER_INFO_FILE=/tmp/userInfo
+
+
 # always run as root
 if [ ${EUID:-0} -ne 0 ]; then
-    export myUID=$(getent passwd $EUID | cut -d: -f3)
-    export myGID=$(getent passwd $EUID | cut -d: -f4) 
-    export myHOME=$(getent passwd $EUID | cut -d: -f6)
+    systemSetup.userInfo $(getent passwd $EUID | awk '{print $0}' RS=':') > "$USER_INFO_FILE"
     sudo --preserve-env "$0" "$@"
+    rm "$USER_INFO_FILE"
     exit
 fi
-
 
 export PATH="${PATH}:${HOME}/.bin"
 declare -r PROGNAME="$(basename "${BASH_SOURCE[0]}")"
 declare -r PROGRAM_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" 
-[ ! -e "${PROGRAM_DIR}/trap.bashlib" ] || source "${PROGRAM_DIR}/trap.bashlib"
+[ -e "${PROGRAM_DIR}/trap.bashlib" ] && source "${PROGRAM_DIR}/trap.bashlib"
+[ -e "$USER_INFO_FILE" ] && source "$USER_INFO_FILE"
 
 if [ $# -eq 0 ] || [[ "${1,,}" = *help ]] || [[ "${1,,}" = *usage ]]; then
     systemSetup.usage
@@ -396,4 +418,3 @@ if [ $# -eq 0 ] || [[ "${1,,}" = *help ]] || [[ "${1,,}" = *usage ]]; then
 else
     systemSetup.getFunction "$@"
 fi
-
