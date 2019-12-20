@@ -1,5 +1,6 @@
 #!/bin/bash
 
+#------------------------------------------------------------------------------
 function module_map() {
   local -i i=0
   local line line2 repo
@@ -16,18 +17,48 @@ function module_map() {
          i=0
          ;;
     esac
-  done < <(cat .gitmodules)
+  done < .gitmodules
 }
+
+#------------------------------------------------------------------------------
+function modified_modules() {
+  local module dir
+  for module in $(git submodule foreach branch-distance | grep '(behind 0)' | cut -d ' ' -f 1); do
+    dir="${module_paths[$module]}"
+    pushd "$dir" >/dev/null
+    printf '%-27s %27s :  %s\n' "${dir}/" "($module)" "$(git log -1 --format=%s)"
+#    HUB_VERBOSE=1 hub pull-request --file "$prfile" -r svc_cyclonebuild  1>pr.stdout 2>pr.stderr
+#    hub pr list
+    popd >/dev/null
+  done
+}
+
+#------------------------------------------------------------------------------
+
+export GITHUB_HOST=eos2git.cec.lab.emc.com
+export HUB_PROTOCOL=https
+#export HUB_VERBOSE=1
+export GITHUB_USER=ballab1 
 
 declare -A module_paths
 eval "module_paths=( $(module_map) )"
 
-declare sm d
-for sm in $(git submodule foreach branch-distance | grep '(behind 0)' | cut -d ' ' -f 1); do
-  d=${module_paths[$sm]}
-  pushd $d >/dev/null;
-  echo "$sm:  $d : $(git log -1 --format=%s)"
-  popd >/dev/null
-done
+declare prfile=/tmp/pr
+cat << EOF > "$prfile"
+[DevOps-F4072] cbf improvements
 
+ - add more utility scripts
+ - move all thirdparty images to own location in registry
+ - hardening of build.sh, deploy and docker-utilities
+ - updated versions of Jenkins, Grafana, nginx, phpmyadmin, pgAdmin4
+EOF
 
+echo '-- PR comment --------------------------------------------------'
+cat "$prfile"
+echo '----------------------------------------------------------------'
+
+modified_modules
+
+echo '----------------------------------------------------------------'
+
+rm "$prfile"

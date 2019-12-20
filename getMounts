@@ -1,0 +1,14 @@
+#!/bin/bash
+
+{
+  for line in $(mount | grep overlay2/); do
+    echo $line \
+     | awk '{print $0}' RS=':' \
+     | awk '{print $0}' RS=',' \
+     | awk '{print $0}' RS='=' \
+     | grep -v -e '^$' \
+     | grep '/' \
+     | sed -e 's|)||' \
+     | sed -E -e 's:/(diff|merged|work)::'
+  done
+} | sort -u -s | sed -E 's|^.+/(.+)$|\1|'

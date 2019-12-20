@@ -1,6 +1,6 @@
 #!/bin/bash
 
-declare version=${1:-7.4.0}
+declare version=${1:-7.5.0}
 
 function getImage()
 {
@@ -14,6 +14,8 @@ function getImage()
     docker rmi "${registry_server}/thirdparty/${image##*/}"
 }
 
+getImage docker.elastic.co/beats/auditbeat:$version
+getImage docker.elastic.co/apm/apm-server:$version
 getImage docker.elastic.co/elasticsearch/elasticsearch:$version
 getImage docker.elastic.co/kibana/kibana:$version
 getImage docker.elastic.co/logstash/logstash:$version

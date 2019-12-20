@@ -9,20 +9,29 @@ alias dr='docker run -it --rm --entrypoint bash'
 alias drm='docker rmi'
 alias ds='docker-search.py'
 alias dt='docker top'
+
 alias dcs='docker-utilities show --services'
 alias dim='docker-utilities show --images'
 alias dnt='docker-utilities show --networks'
 alias dps='docker-utilities show --processes'
-alias dut='docker-utilities'
-alias env='/usr/bin/env | sort'
+alias roc='docker-utilities clean'
 alias getImage='docker-utilities getImage'
-alias gl='git lg'
+
+
+alias dut='docker-utilities'
+
 alias gk='git-keep'
+alias gl='git lg'
 alias gr='git-revision'
 alias gs='git status-extended'
-alias kc='kubectl'
-alias rcc='removeCurrentContainers'
+
+
+alias env='/usr/bin/env | sort'
+alias rcc='docker-utilities remoteLocal'
+
+
 alias rlg='dockerRunLogs'
-alias roc='docker-utilities clean'
+alias tmux='tmux -f ~/.tmux/tmux.conf'
 alias dockviz='docker run -it --rm -v /var/run/docker.sock:/var/run/docker.sock nate/dockviz'
+alias kc='kubectl'
 
