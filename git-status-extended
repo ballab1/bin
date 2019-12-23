@@ -1,8 +1,23 @@
 #!/bin/bash 
 
+# save git config color settings
+declare -A props=( ['ui']='' ['status']='')
+for prop in "${!props[@]}";do
+  props[$prop]=$(git config "color.$prop")
+done
+
+git config color.ui true
+git config color.status always
+
 declare -a status
 mapfile -t status < <(git status)
 printf '%s\n' "${status[@]:0:2}"
+
+# restore git config color settings
+for prop in "${!props[@]}";do
+  git config "color.$prop" "${props[$prop]}"
+done
+
 
 if [ "$(git submodule)" ]; then
     echo
