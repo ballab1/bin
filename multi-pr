@@ -1,51 +1,201 @@
 #!/bin/bash
 
+#----------------------------------------------------------------------------------------------
+function gitBranch()
+{
+    local branch=$(git rev-parse --abbrev-ref HEAD)
+    if [ "$branch" = 'HEAD' ]; then
+        local -a branches
+        mapfile -t branches < <(git show-ref | grep -vE 'tags|HEAD' | awk '{print substr($2, 21)}')
+        if [ "${#branches[0]}" -eq 0 ]; then
+          {
+            printf '\e[31m%s\e[0m\n' "***ERROR: failure to determine current branch for $(git config --get remote.origin.url  2>/dev/null). Most likely on a detached HEAD"
+            git log -n8 --oneline --graph --abbrev-commit --decorate --all
+          } >&2
+            return 1
+        fi
+        branch="${branches[0]}"
+    fi
+    echo "$branch"
+    return 0
+}
+
+#------------------------------------------------------------------------------
+function gitReferenceBranch() {
+    local ref="$(git config --get core.branch)"
+    [ -z "$ref" ] && ref='master'
+    echo $ref
+}
+
 #------------------------------------------------------------------------------
 function module_map() {
-  local -i i=0
-  local line line2 repo
-  while read -r line; do
-    case "$i" in
-      0) i=1
-         ;;
-      1) line2="${line#*= }"
-         i=2
-         ;; 
-      2) repo="${line#*= ../}"
-         repo="${repo%.git*}"
-         echo -e "['"${repo}"']='"${line2}"'"
-         i=0
-         ;;
-    esac
-  done < .gitmodules
+    local -r gitmodules="${1:?}"
+
+    local -i i=0
+    local line dir repo
+    while read -r line; do
+        case "$i" in
+            0) i=1
+               ;;
+            1) dir="${line#*= }"
+               i=2
+               ;; 
+            2) repo="${line#*= ../}"
+               repo="${repo%.git*}"
+               echo -e "['"${dir}"']='"${repo}"'"
+               i=0
+              ;;
+        esac
+    done < "$gitmodules"
+}
+
+#------------------------------------------------------------------------------
+function modificationInfo() {
+    local -r ref="${1:?}"
+    local -r dir="${2:-}"
+
+    git show-ref "$ref" &>/dev/null || return 1
+    
+    local -r branch=$(gitBranch)
+    [ "$branch" = "$ref" ] && return 2
+    git show-ref "$branch" &>/dev/null
+
+    local -i status=0
+    local -r branch_commit="$(git rev-parse "$branch"  2>/dev/null )" || return 4
+    local -r ref_commit="$(git rev-parse "$ref"  2>/dev/null )" || return 5
+
+
+    local -r revList="$(git rev-list --left-right ${branch}...${ref} -- 2>/dev/null)"
+    local -ri ahead="$(grep -c '^<' <<< "$revList")"
+    local -ri behind="$(grep -c '^>' <<< "$revList")"
+
+    printf '"ahead":%d,"behind":%d' $ahead $behind
+    printf ',"repository":"%s"' "$( git config --get remote.origin.url  2>/dev/null )"
+    printf ',"ref":{"name":"%s","commit":"%s"}' "$ref" "$(git rev-parse "$ref"  2>/dev/null )"
+    printf ',"branch":{"name":"%s","commit":"%s"}' "$branch" "$(git rev-parse "$branch" 2>/dev/null )"
+    if [ $ahead -gt 0 ]; then
+        local -a comments
+        mapfile -t comments < <(git log -"$ahead" --date=short --format='%cd %s')
+        printf ',"comments":["%s"' "${comments[0]}"
+        [ $ahead -gt 1 ] && printf ',"%s"' "${comments[@]:1}"
+        echo -n ']'
+    fi
+    [ -z "${dir:-}" ] || printf ',"dir":"%s","module":"%s"' "$dir"  "${MODULE_NAMES[$dir]}"
+    return 0
 }
 
 #------------------------------------------------------------------------------
 function modified_modules() {
-  local module dir
-  for module in $(git submodule foreach branch-distance | grep '(behind 0)' | cut -d ' ' -f 1); do
-    dir="${module_paths[$module]}"
-    pushd "$dir" >/dev/null
-    printf '%-27s %27s :  %s\n' "${dir}/" "($module)" "$(git log -1 --format=%s)"
-#    HUB_VERBOSE=1 hub pull-request --file "$prfile" -r svc_cyclonebuild  1>pr.stdout 2>pr.stderr
-#    hub pr list
-    popd >/dev/null
-  done
+    local -r ref="${1:?}"
+    local pr_comment="${2:?}"
+
+    local ahead behind branch dir module revlist
+
+    branch=$(gitBranch)
+    [ "$branch" = "$ref" ] && return 0
+
+    local -i status    
+    local info=$(modificationInfo "$ref") && status=$? || status=$?
+    
+#    echo "$ref : $status" >&2
+    [ $status = 0 ] || return 0
+
+    echo -n '{'
+    echo -n $info
+
+    local -a lines
+    mapfile -t lines <<< "$pr_comment"
+    printf ',"pr_comment":["%s"' "${lines[0]}"
+    [ ${#lines[*]} -gt 1 ] && printf ',"%s"' "${lines[@]:1}"
+    echo -n ']'
+
+    local -i idx=0
+    echo -n ',"modules":['
+    for dir in $(git submodule | awk '{print $2}'); do
+        (( idx++ )) && echo -n ','
+        pushd "$dir" >/dev/null
+        info=$(modificationInfo "$ref" "$dir") && status=$? || status=$?
+#        echo "$ref..$dir : $status" >&2
+        if [ $status = 0 ]; then
+            echo -n '{'
+            echo -n $info
+            echo -n '}'
+        fi
+        popd >/dev/null
+    done
+    echo -n ']}'
+}
+
+#------------------------------------------------------------------------------
+function showReport() {
+    local json="${1:?}"
+
+    local -r branch_name="$( jq -r '.branch.name' <<< "$json" )"
+    local -r branch_commit="$( jq -r '.branch.commit' <<< "$json" )"
+    local -r ref_name="$( jq -r '.ref.name' <<< "$json" )"
+    local -r ref_commit="$( jq -r '.ref.commit' <<< "$json" )"
+    local -r repository="$( jq -r '.repository' <<< "$json" )"
+    local -r diffs="$( jq -r '[.modules[]|select(.ahead != 0 or .behind != 0)]|length' <<< "$json" )"
+    local ahead="$( jq -r '.ahead' <<< "$json" )"
+    local -r pr_comment="$( jq -r '.pr_comment[]' <<< "$json" )"
+
+    echo 
+    echo "Repository: $repository" 
+    echo "  total number of submodules: ${#MODULE_NAMES[*]}"
+    echo "  differences between $branch_name (${branch_commit:0:6}) & $ref_name (${ref_commit:0:6})"
+    echo "  number of submodules with changes: $diffs"
+    echo "  number of commits: $ahead"
+    echo '  commit history:' 
+    local -a comments
+    mapfile -t comments < <(jq -r '.comments[]' <<< "$json")
+    printf '    %s\n'  "${comments[@]}"
+    echo 
+
+    echo '-- PR comment --------------------------------------------------'
+    echo "$pr_comment"
+    echo 
+
+    echo 'Change summary'
+    echo '------------------------------------------------------------------------------------------------------------'
+    echo ' behind | ahead | dir                         | submodule                   | last commit comment'
+    echo '------------------------------------------------------------------------------------------------------------'
+
+    local dir m_json behind module
+    for dir in "${!MODULE_NAMES[@]}"; do
+        m_json="$(jq -cM '.modules[]|select(.dir == "'"$dir"'")' <<< "$json")"
+        ahead="$(jq -r '.ahead' <<< "$m_json")"
+        behind="$(jq -r '.behind' <<< "$m_json")"
+        module="$(jq -r '.module' <<< "$m_json")"
+        if [[ $ahead -ne 0 || $behind -ne 0 ]]; then
+            mapfile -t comments < <(jq -r '.comments[]' <<< "$m_json")
+            [ $behind -ne 0 ] && echo -ne '\e[31m'
+            printf ' %5d  | %4d  | %-27s | %-27s | %s\n' "$behind" "$ahead" "${dir}/" "$module" "${comments[0]}"
+            [ $ahead -gt 1 ] && printf '        |       |                             |                             | %s\n' "${comments[@]:1}"
+            [ $behind -ne 0 ] && echo -ne '\e[0m'
+        fi
+    done
+    echo '------------------------------------------------------------------------------------------------------------'
+    echo
+
+    [ $(jq '[.modules[].behind] | add' <<< "$json") -eq 0 ] || echo -e 'This module is not ready to create a PR'
 }
 
 #------------------------------------------------------------------------------
 
-export GITHUB_HOST=eos2git.cec.lab.emc.com
-export HUB_PROTOCOL=https
+#export GITHUB_HOST=github.com
+#export HUB_PROTOCOL=https
 #export HUB_VERBOSE=1
-export GITHUB_USER=ballab1 
+#export GITHUB_USER=ballab1 
 
-declare -A module_paths
-eval "module_paths=( $(module_map) )"
+declare -A MODULE_NAMES
+eval "MODULE_NAMES=( $(module_map ./.gitmodules) )"
+
+declare -r REFERENCE="${1:-origin/$(gitReferenceBranch)}" 
+
 
 declare prfile=/tmp/pr
 cat << EOF > "$prfile"
-[DevOps-F4072] cbf improvements
+cbf improvements
 
  - add more utility scripts
  - move all thirdparty images to own location in registry
@@ -53,12 +203,10 @@ cat << EOF > "$prfile"
  - updated versions of Jenkins, Grafana, nginx, phpmyadmin, pgAdmin4
 EOF
 
-echo '-- PR comment --------------------------------------------------'
-cat "$prfile"
-echo '----------------------------------------------------------------'
-
-modified_modules
-
-echo '----------------------------------------------------------------'
-
-rm "$prfile"
+declare json="$(modified_modules "$REFERENCE" "$(< "$prfile")")"
+if [ "${DEBUG:-0}" -eq 0 ]; then
+    showReport "$json"
+else
+    echo "$json"
+fi
+[ -e "$prfile" ] && rm "$prfile"

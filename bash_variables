@@ -1,12 +1,12 @@
 export BASH_UNIT_ROOT=~/GIT/other/bash_unit
 export TMUX_TMPDIR=~/.tmux/tmp
-export DOCKER_REGISTRY=ubuntu-s2:5000/
+export DOCKER_REGISTRY=ubuntu-s2.home:5000/
 
 export GRADLE_USER_HOME=/home/bobb
 export KAFKA_CLUSTER='home'
-export KAFKA_AVRO_HOSTS=ubuntu-s3,ubuntu-s4,ubuntu-s1
-export KAFKA_BOOTSTRAP_SERVERS=ubuntu-s3:9092,ubuntu-s4:9092,ubuntu-s1:9092
-export ZOOKEEPER_HOSTS=ubuntu-s3:2181,ubuntu-s4:2181,ubuntu-s1:2181 
+export KAFKA_AVRO_HOSTS=ubuntu-s3.home,ubuntu-s4.home
+export KAFKA_BOOTSTRAP_SERVERS=ubuntu-s3.home:9092,ubuntu-s4.home:9092
+export ZOOKEEPER_HOSTS=ubuntu-s3.home:2181,ubuntu-s4.home:2181 
    
 
 export GIT_PS1_SHOWDIRTYSTATE=1

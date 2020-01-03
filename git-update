@@ -4,10 +4,10 @@
 function usage()
 {
     cat >&2 << EOF
-Make the <branch_to_update> the same as the 'reference <branch>'
+Update <branch_to_update> to same commit as the 'reference <branch>'
 
 Usage:
-    git-update [ -h|--help ] | [ --reference <branch> ] [ <branch_to_update> ]
+    $(basename $0) [ -h|--help ] | [ --reference <branch> ] [ <branch_to_update> ]
 
     Common options:
         -h --help                Display a basic set of usage instructions
@@ -96,7 +96,7 @@ case $# in
     2) [ "${opts['reference']:-}" ] && opts['reference']=$1; branch=$2; shift 2;;
 esac
 if [ $# -new 0 ]; then
-    echo 'Invalid args passed
+    echo 'Invalid args passed'
     exit 1
 fi
 [ -z "${opts['reference']:-}" ] && opts['reference']='master'

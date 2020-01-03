@@ -59,15 +59,15 @@ function systemSetup.05_setupRegistryAccess() {
     mkdir -p "$(dirname "$daemonFile")" ||:
     if [ ! -f "$daemonFile" ]; then
         echo "Updating $daemonFile"
-        echo '{ "insecure-registries":["ubuntu-s2:5000"] }' > "${daemonFile}.tmp"
+        echo '{ "insecure-registries":["ubuntu-s2.home:5000"] }' > "${daemonFile}.tmp"
 
     elif [ "$(jq 'has("insecure-registries")')" != 'true' ]; then
         echo "Updating $daemonFile"
-        jq '. + { "insecure-registries":["ubuntu-s2:5000"] }' "$daemonFile" > "${daemonFile}.tmp"
+        jq '. + { "insecure-registries":["ubuntu-s2.home:5000"] }' "$daemonFile" > "${daemonFile}.tmp"
 
-    elif [ "$(jq '."insecure-registries"[]|contains( "ubuntu-s2:5000" )' "$daemonFile")" != 'true' ]; then
+    elif [ "$(jq '."insecure-registries"[]|contains( "ubuntu-s2.home:5000" )' "$daemonFile")" != 'true' ]; then
         echo "Updating $daemonFile"
-        jq 'map_values(. +  ["ubuntu-s2:5000"] )' "$daemonFile" > "${daemonFile}.tmp"
+        jq 'map_values(. +  ["ubuntu-s2.home:5000"] )' "$daemonFile" > "${daemonFile}.tmp"
 
     else
         return 0
@@ -118,6 +118,7 @@ function systemSetup.12_jenkinsSlaveFolders() {
 
 function systemSetup.13_updatePerlSupport() {
     false || return 0    # skip this
+
     if [[ -z ${myUID:-} || -z ${myGID:-} || -z ${myHOME:-} ]]; then
         echo 'need to run this from non-user'
         return 0
@@ -217,15 +218,29 @@ function systemSetup.16_unencryptRepos() {
 }
 
 function systemSetup.17_updateHosts() {
+    [ "$(hostname -s).home" = "$(hostname -f)" ] && return 0
     if [ ! -e "${myHOME}/.inf/hosts" ]; then
         echo 'need to run this from non-user'
         return 0
     fi
-    local target=/etc/hosts
-    [ "$(grep -scE 'ubuntu-s' "$target")" -lt 6 ] && return 0
+cat << EOF
+  modify /etc/netplan/50-cloud-init.yaml
+    network:
+        version: 2
+        renderer: networkd
+        ethernets:
+            eno1:
+                dhcp4: true
+                dhcp6: true
+                nameservers:
+                    search: [ ubuntu.home, home ]
 
-    echo "Updating $target"
-    cp "${myHOME}/.inf/hosts" /etc/
+  modify /etc/hostname
+   - include dns '.home' suffix
+
+  then run netplan try
+  verify with hostname -s, hostname -f, systemd-resolve --status
+EOF
 }
 
 function systemSetup.18_updateUsersAndGroups() {

@@ -19,7 +19,7 @@ cd ~
 
 echo
 echo -en '\e[97mfinding "bashlib" directories\e[0m'
-mapfile -t dirs < <( sudo find . -name docker.bashlib -type f | xargs dirname )
+mapfile -t dirs < <( sudo find . -mount -name docker.bashlib -type f | xargs dirname )
 echo ":  ${#dirs[*]} found"
 echo
 for dir in "${dirs[@]}"; do
@@ -33,7 +33,7 @@ done
 
 echo
 echo -en '\e[97mfinding "utilities" directories\e[0m'
-mapfile -t dirs < <( sudo find . -name docker-utilities -type f | xargs dirname )
+mapfile -t dirs < <( sudo find . -mount -name docker-utilities -type f | xargs dirname )
 echo ": ${#dirs[*]} found"
 echo
 for dir in "${dirs[@]}"; do
@@ -47,7 +47,7 @@ done
 
 echo
 echo -en '\e[97mfinding "parent" directories\e[0m'
-mapfile -t dirs < <( sudo find . -name docker-utilities -type f | xargs dirname | xargs dirname )
+mapfile -t dirs < <( sudo find . -mount -name docker-utilities -type f | xargs dirname | xargs dirname )
 echo ": ${#dirs[*]} found"
 for dir in "${dirs[@]}"; do
     [ -e "${dir}/.git" ] || continue
