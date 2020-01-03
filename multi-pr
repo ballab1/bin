@@ -157,7 +157,7 @@ function showReport() {
 
     echo 'Change summary'
     echo '------------------------------------------------------------------------------------------------------------'
-    echo ' behind | ahead | dir                         | submodule                   | last commit comment'
+    echo ' behind | ahead | submodule                   | folder                      | last commit comment'
     echo '------------------------------------------------------------------------------------------------------------'
 
     local dir m_json behind module
@@ -169,8 +169,8 @@ function showReport() {
         if [[ $ahead -ne 0 || $behind -ne 0 ]]; then
             mapfile -t comments < <(jq -r '.comments[]' <<< "$m_json")
             [ $behind -ne 0 ] && echo -ne '\e[31m'
-            printf ' %5d  | %4d  | %-27s | %-27s | %s\n' "$behind" "$ahead" "${dir}/" "$module" "${comments[0]}"
-            [ $ahead -gt 1 ] && printf '        |       |                             |                             | %s\n' "${comments[@]:1}"
+            printf ' %4d   | %4d  | %-27s | %-27s | %s\n' "$behind" "$ahead" "$module" "${dir}/" "${comments[0]}"
+            [[ $VERBOSE -gt 0 && $ahead -gt 1 ]] && printf '        |       |                             |                             | %s\n' "${comments[@]:1}"
             [ $behind -ne 0 ] && echo -ne '\e[0m'
         fi
     done
@@ -191,7 +191,7 @@ declare -A MODULE_NAMES
 eval "MODULE_NAMES=( $(module_map ./.gitmodules) )"
 
 declare -r REFERENCE="${1:-origin/$(gitReferenceBranch)}" 
-
+declare -i VERBOSE=0
 
 declare prfile=/tmp/pr
 cat << EOF > "$prfile"

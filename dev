@@ -17,7 +17,7 @@ declare svc="$(basename "${BASH_SOURCE[0]}")"
 cleanup
 
 # ensure we have latest version of container
-[ "${TEST:-}" ] || docker pull ${DOCKER_REGISTRY:-ubuntu-s2:5000/}${CONTAINER_OS:-alpine}/build_container:${CONTAINER_TAG:-latest}
+[ "${TEST:-}" ] || docker pull ${DOCKER_REGISTRY:-ubuntu-s2.home:5000/}${CONTAINER_OS:-alpine}/build_container:${CONTAINER_TAG:-latest}
 [ ${1:-} ] || exit 0
 
 # setup environment vars about host as well as conditional vars

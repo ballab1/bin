@@ -5,7 +5,7 @@ declare version=${1:-7.5.1}
 function getImage()
 {
     local -r image=${1:?}
-    local -r registry_server=${REGISTRY_SERVER:-ubuntu-s2:5000}
+    local -r registry_server=${REGISTRY_SERVER:-ubuntu-s2.home:5000}
 
     [ "$(docker image ls -q $image)" ] || docker pull "$image"
     docker tag "$image" "${registry_server}/thirdparty/${image##*/}"
