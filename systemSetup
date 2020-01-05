@@ -297,7 +297,7 @@ EOF
 
 function systemSetup.functions() {
     # list all user functions
-    grep -R '^function' "${PROGRAM_DIR}/$PROGNAME" \
+    grep -E '^function' "${PROGRAM_DIR}/$PROGNAME" \
     | sed -re 's|^function systemSetup.(.+)\s*\(.+$|\1|' \
     | grep -vE '^(functions|getFunction|getUserInfo|run|saveDefaultDockerCompose|showEnvironment|usage|userInfo|verifyPermisions)$' \
     | sed -E 's|_|. |g' \

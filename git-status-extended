@@ -1,27 +1,219 @@
 #!/bin/bash 
 
-# save git config color settings
-declare -A props=( ['ui']='' ['status']='')
-for prop in "${!props[@]}";do
-  props[$prop]=$(git config "color.$prop")
-done
+#!/bin/bash
 
-git config color.ui true
-git config color.status always
+#----------------------------------------------------------------------------------------------
+function gitBranch()
+{
+    local branch=$(git rev-parse --abbrev-ref HEAD)
+    if [ "$branch" = 'HEAD' ]; then
+        local -a branches
+        mapfile -t branches < <(git show-ref | grep -vE 'tags|HEAD' | awk '{print substr($2, 21)}')
+        if [ "${#branches[0]}" -eq 0 ]; then
+          {
+            printf '\e[31m%s\e[0m\n' "***ERROR: failure to determine current branch for $(git config --get remote.origin.url  2>/dev/null). Most likely on a detached HEAD"
+            git log -n8 --oneline --graph --abbrev-commit --decorate --all
+          } >&2
+            return 1
+        fi
+        branch="${branches[0]}"
+    fi
+    echo "$branch"
+    return 0
+}
 
-declare -a status
-mapfile -t status < <(git status)
-printf '%s\n' "${status[@]:0:2}"
+#------------------------------------------------------------------------------
+function gitReferenceBranch() {
+    local ref="$(git config --get core.branch)"
+    [ -z "$ref" ] && ref='master'
+    echo $ref
+}
 
-# restore git config color settings
-for prop in "${!props[@]}";do
-  git config "color.$prop" "${props[$prop]}"
-done
+#------------------------------------------------------------------------------
+function module_map() {
+    local -r gitmodules="${1:?}"
+
+    local -i i=0
+    local line dir repo
+    while read -r line; do
+        case "$i" in
+            0) i=1
+               ;;
+            1) dir="${line#*= }"
+               i=2
+               ;; 
+            2) repo="${line#*= ../}"
+               repo="${repo%.git*}"
+               echo -e "['"${dir}"']='"${repo}"'"
+               i=0
+              ;;
+        esac
+    done < "$gitmodules"
+}
+
+#------------------------------------------------------------------------------
+function modificationInfo() {
+    local -r ref="${1:?}"
+    local -r dir="${2:-}"
+
+    git show-ref "$ref" &>/dev/null || return 1
+    
+    local -r branch=$(gitBranch)
+    [ "$branch" = "$ref" ] && return 2
+    git show-ref "$branch" &>/dev/null
+
+    local -i status=0
+    local -r branch_commit="$(git rev-parse "$branch"  2>/dev/null )" || return 4
+    local -r ref_commit="$(git rev-parse "$ref"  2>/dev/null )" || return 5
 
 
-if [ "$(git submodule)" ]; then
+    local -r revList="$(git rev-list --left-right ${branch}...${ref} -- 2>/dev/null)"
+    local -ri ahead="$(grep -c '^<' <<< "$revList")"
+    local -ri behind="$(grep -c '^>' <<< "$revList")"
+
+    printf '"ahead":%d,"behind":%d' $ahead $behind
+    printf ',"repository":"%s"' "$( git config --get remote.origin.url  2>/dev/null )"
+    printf ',"ref":{"name":"%s","commit":"%s"}' "$ref" "$(git rev-parse "$ref"  2>/dev/null )"
+    printf ',"branch":{"name":"%s","commit":"%s"}' "$branch" "$(git rev-parse "$branch" 2>/dev/null )"
+    if [ $ahead -gt 0 ]; then
+        local -a comments
+        mapfile -t comments < <(git log -"$ahead" --date=short --format='%cd %s')
+        printf ',"comments":["%s"' "${comments[0]}"
+        [ $ahead -gt 1 ] && printf ',"%s"' "${comments[@]:1}"
+        echo -n ']'
+    fi
+    [ -z "${dir:-}" ] || printf ',"dir":"%s","module":"%s"' "$dir"  "${MODULE_NAMES[$dir]}"
+    return 0
+}
+
+#------------------------------------------------------------------------------
+function modified_modules() {
+    local -r ref="${1:?}"
+
+    local ahead behind branch dir module revlist
+
+    branch=$(gitBranch)
+    [ "$branch" = "$ref" ] && return 0
+
+    local -i status    
+    local info=$(modificationInfo "$ref") && status=$? || status=$?
+    
+#    echo "$ref : $status" >&2
+    [ $status = 0 ] || return 0
+
+    echo -n '{'
+    echo -n $info
+
+    local -i idx=0
+    echo -n ',"modules":['
+    for dir in $(git submodule | awk '{print $2}'); do
+        (( idx++ )) && echo -n ','
+        pushd "$dir" >/dev/null
+        info=$(modificationInfo "$ref" "$dir") && status=$? || status=$?
+#        echo "$ref..$dir : $status" >&2
+        if [ $status = 0 ]; then
+            echo -n '{'
+            echo -n $info
+            echo -n '}'
+        fi
+        popd >/dev/null
+    done
+    echo -n ']}'
+}
+
+#------------------------------------------------------------------------------
+function showBasicStatus() {
+
+    # save git config color settings
+    local -A props=( ['ui']='' ['status']='')
+    for prop in "${!props[@]}";do
+        props[$prop]=$(git config "color.$prop")
+    done
+
+    git config color.ui true
+    git config color.status always
+
+    mapfile -t STATUS < <(git status)
+    printf '%s\n' "${STATUS[@]:0:2}"
+
+    # restore git config color settings
+    for prop in "${!props[@]}";do
+        git config "color.$prop" "${props[$prop]}"
+    done
+}
+
+#------------------------------------------------------------------------------
+function showSubmoduleReport() {
+    local json="${1:?}"
+
+    local ahead="$( jq -r '.ahead' <<< "$json" )"
+    local behind="$( jq -r '.behind' <<< "$json" )"
+    [[ $ahead -eq 0 && $behind -eq 0 ]] && return 0
+
+    local -r branch_name="$( jq -r '.branch.name' <<< "$json" )"
+    local -r branch_commit="$( jq -r '.branch.commit' <<< "$json" )"
+    local -r ref_name="$( jq -r '.ref.name' <<< "$json" )"
+    local -r ref_commit="$( jq -r '.ref.commit' <<< "$json" )"
+    local -r repository="$( jq -r '.repository' <<< "$json" )"
+    local -r diffs="$( jq -r '[.modules[]|select(.ahead != 0 or .behind != 0)]|length' <<< "$json" )"
+
+    if [ $VERBOSE -gt 0 ]; then
+        echo 
+        echo "Repository: $repository" 
+        echo "  total number of submodules: ${#MODULE_NAMES[*]}"
+        echo "  differences between $branch_name (${branch_commit:0:6}) & $ref_name (${ref_commit:0:6})"
+        echo "  number of submodules with changes: $diffs"
+        echo "  number of commits: $ahead"
+        echo '  commit history:' 
+        local -a comments
+        mapfile -t comments < <(jq -r '.comments[]' <<< "$json")
+        printf '    %s\n'  "${comments[@]}"
+    fi
+
+    echo 
+    echo 'Change summary'
+    echo '------------------------------------------------------------------------------------------------------------'
+    echo ' behind | ahead | submodule                   | folder                      | last commit comment'
+    echo '------------------------------------------------------------------------------------------------------------'
+
+    local dir m_json module
+    for dir in "${!MODULE_NAMES[@]}"; do
+        m_json="$(jq -cM '.modules[]|select(.dir == "'"$dir"'")' <<< "$json")"
+        ahead="$(jq -r '.ahead' <<< "$m_json")"
+        behind="$(jq -r '.behind' <<< "$m_json")"
+        module="$(jq -r '.module' <<< "$m_json")"
+        if [[ $ahead -ne 0 || $behind -ne 0 ]]; then
+            mapfile -t comments < <(jq -r '.comments[]' <<< "$m_json")
+            [ $behind -ne 0 ] && echo -ne '\e[31m'
+            printf ' %4d   | %4d  | %-27s | %-27s | %s\n' "$behind" "$ahead" "$module" "${dir}/" "${comments[0]}"
+            [[ $VERBOSE -gt 0 && $ahead -gt 1 ]] && printf '        |       |                             |                             | %s\n' "${comments[@]:1}"
+            [ $behind -ne 0 ] && echo -ne '\e[0m'
+        fi
+    done
+    echo '------------------------------------------------------------------------------------------------------------'
     echo
-    declare myBranch=$(git rev-parse --abbrev-ref HEAD)
-    git submodule foreach branch-distance | grep ' | '"$myBranch"
+
+    [ $(jq '[.modules[].behind] | add' <<< "$json") -eq 0 ] || echo -e 'This module is not ready to create a PR'
+}
+
+#------------------------------------------------------------------------------
+
+declare -a STATUS
+
+showBasicStatus
+
+if [ -e .gitmodules ]; then
+    declare -A MODULE_NAMES
+    eval "MODULE_NAMES=( $(module_map .gitmodules) )"
+
+    declare -r REFERENCE="${1:-origin/$(gitReferenceBranch)}" 
+    declare -i VERBOSE=0
+
+    declare json="$(modified_modules "$REFERENCE")"
+    if [ "${DEBUG:-0}" -eq 0 ]; then
+        showSubmoduleReport "$json"
+    else
+        echo "$json"
+    fi
 fi
-printf '%s\n' "${status[@]:2}"
+printf '%s\n' "${STATUS[@]:2}"

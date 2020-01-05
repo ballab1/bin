@@ -82,7 +82,7 @@ while [ $# -gt 0 ]; do
         -h|--h|--help|-help)  usage;;
         -H|--H|--HELP|-HELP)  usage;;
         --Help|-Help)         usage;;
-        -r|--r|--reference)   opts['reference']='master'; shift;;
+        -r|--r|--reference)   opts['reference']=$(gitMainBranch); shift;;
         --)                   shift; break;;
     esac
 done
