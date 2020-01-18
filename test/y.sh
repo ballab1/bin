@@ -12,6 +12,7 @@ fi
 source "$loader"
 appenv.loader 'deploy.main'
 
+if false; then
 echo
 json.encodeField  -- 100
 
@@ -34,3 +35,27 @@ declare -A b=( ['a']=1  ['b']=true  ['c']='Joan' )
 echo
 json.encodeField  'hash' '#b'
 echo
+
+declare str='"access_rights":777,
+"access_rights_in_human_readable_form":"-rwxrwxrwx",
+"sha256":"d783500c28dce865b9c6eb0e28dd86367d8c5641e441befd003aec5191ef6219"'
+
+echo
+json.encodeField  -- "$str"
+echo
+
+fi
+
+declare filename=$(ls '/mnt/Synology/Guest/All Users/Music/Ace Of Base/The Bridge/09'*.wma)
+filename="$(stat --format='%n' "$filename")"
+echo -n '{'
+json.encodeField  'name' "$( basename "$filename" )"
+echo '}'
+
+filename=$(ls '/mnt/Synology/Guest/All Users/Music/Blue '*'Cult/Don'*/05*)
+filename="$(stat --format='%n' "$filename")"
+echo -n '{'
+json.encodeField  'name' "$( basename "$filename" )"
+echo -n ','
+json.encodeField  'folder' "$( dirname "$filename" )"
+echo '}'

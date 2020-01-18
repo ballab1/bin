@@ -3,8 +3,6 @@
     email = bob.ballantyne@emc.com
 [include]
     path = /home/bobb/.enterprise/config.include
-[http]
-    sslVerify = false
 [credential]
     username = ballab1
     helper = cache --timeout=999999
@@ -36,6 +34,7 @@
 
 [url "https://github.com/ballab1"]
     pushInsteadOf = https://github.com/ballab1
+
 [url "git@github.com/ballab1"]
     pushInsteadOf = git@github.com/ballab1
    

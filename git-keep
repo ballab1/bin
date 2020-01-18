@@ -8,7 +8,7 @@ Save all changes in current repository to upstream branch on GitHub server
 Squash merges outstanding changes in the current repo.
     
 Usage:
-    git-keep [ -h|--help ] | [ --history ] | [ --commit <commitId> ] | [ --message <message>]
+    $PROGNAME [ -h|--help ] | [ --history ] | [ --commit <commitId> ] | [ --message <message>]
 
     Common options:
         -h --help                Display a basic set of usage instructions
@@ -26,11 +26,11 @@ EOF
 }
 
 #---------------------------------------------------------------------------------------------- 
-function gitMainBranch()
+function gitReferenceBranch()
 {
-    local master="$(git config --get core.branch)"
-    [ -z "$master" ] && master='master'
-    echo $master
+    local ref="$(git config --get core.branch)"
+    [ -z "$ref" ] && ref='master'
+    echo $ref
 }
 
 #---------------------------------------------------------------------------------------------- 
@@ -49,7 +49,7 @@ function keep()
     declare message="${2:?}"
 
     # merge content into specified commit of current branch
-    if [ $(git rev-parse --abbrev-ref HEAD) = "$MASTER" ] || [ $(git rev-parse HEAD) != $(git rev-parse "$MASTER") ]; then
+    if [ $(git rev-parse --abbrev-ref HEAD) = "$REF" ] || [ $(git rev-parse HEAD) != $(git rev-parse "origin/${REF#origin/}") ]; then
         run "git add -A"
         run "git commit -m ':git keep: $(date)'"
         run "git reset --soft $commit"
@@ -75,6 +75,8 @@ function verify()
 
     # do nothing when tree is clean 
     [ "$(git diff HEAD)" ] || [ "$(git status --porcelain)" ] || exit 0
+
+    #[ $(git rev-parse --verify --quiet "origin/$REF" &> /dev/null ; echo $?) -eq 0 ] || exit 0
 }
 
 #---------------------------------------------------------------------------------------------- 
@@ -83,13 +85,12 @@ function verify()
 #
 #---------------------------------------------------------------------------------------------- 
 
-declare -r DEBUG=${DEBUG:-1}    # set to 0 if you do not wish to see native 'git' commands
-declare -r MASTER=$(gitMainBranch)
 declare -r grey='\e[90m'
 declare -r reset='\e[0m'
-declare -r progname="$( basename "${BASH_SOURCE[0]}" )" 
+declare -r PROGNAME="$( basename "${BASH_SOURCE[0]}" )" 
+declare -r DEBUG=${DEBUG:-1}    # set to 0 if you do not wish to see native 'git' commands
 
-declare -r options=$(getopt --longoptions "help,Help,HELP,commit:,history,message:" --options "Hhc:m:" --name "$progname" -- "$@") || usage
+declare -r options=$(getopt --longoptions "help,Help,HELP,commit:,history,message:" --options "Hhc:m:" --name "$PROGNAME" -- "$@") || usage
 eval set -- "$options"
 
 declare -A opts=()
@@ -107,6 +108,7 @@ while [ $# -gt 0 ]; do
 done 
 
 # check for changes
+declare -r REF=$(gitReferenceBranch)
 verify
 
 # default arguments when nothing specified
