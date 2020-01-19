@@ -143,9 +143,8 @@ function showBasicStatus() {
 function showSubmoduleReport() {
     local json="${1:?}"
 
-    local ahead="$( jq -r '.ahead' <<< "$json" )"
-    local behind="$( jq -r '.behind' <<< "$json" )"
-    local modified="$( jq -r '.modified' <<< "$json" )"
+    local ahead="$( jq -r '[.modules[].ahead]|add' <<< "$json" )"
+    local behind="$( jq -r '[.modules[].behind]|add' <<< "$json" )"
     [[ $ahead -eq 0 && $behind -eq 0 ]] && return 0
 
     local -r branch_name="$( jq -r '.branch.name' <<< "$json" )"
@@ -155,7 +154,12 @@ function showSubmoduleReport() {
     local -r repository="$( jq -r '.repository' <<< "$json" )"
     local -r diffs="$( jq -r '[.modules[]|select(.ahead != 0 or .behind != 0)]|length' <<< "$json" )"
 
+    local modified
     if [ $VERBOSE -gt 0 ]; then
+        ahead="$( jq -r '.ahead' <<< "$json" )"
+        behind="$( jq -r '.behind' <<< "$json" )"
+        modified="$( jq -r '.modified' <<< "$json" )"
+
         echo 
         echo "Repository: $repository" 
         echo "  total number of submodules: ${#MODULE_NAMES[*]}"

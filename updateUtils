@@ -31,7 +31,8 @@ echo
 for dir in "${dirs[@]}"; do
     echo -e "\\e[95mEntering ${dir}\\e[0m"
     pushd "$dir" > /dev/null
-    git fetch --all
+    git tag -d $(git tag --list)
+    git fetch --all --tags
     git checkout origin/$REF
     popd > /dev/null
     echo
@@ -45,7 +46,8 @@ echo
 for dir in "${dirs[@]}"; do
     echo -e "\\e[95mEntering ${dir}\\e[0m"
     pushd "$dir" > /dev/null
-    git fetch --all
+    git tag -d $(git tag --list)
+    git fetch --all --tags
     git checkout origin/$REF
     popd > /dev/null
     echo
