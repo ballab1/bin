@@ -24,5 +24,6 @@ verifyPermisions 700 "${myHOME}/.ssh"
 
 verifyPermisions 600 "${myHOME}/.ssh/authorized_keys"
 verifyPermisions 600 "${myHOME}/.ssh/id_rsa"
+[ -e "${myHOME}/.ssh/config" ] && verifyPermisions 600 "${myHOME}/.ssh/config"
 verifyPermisions 644 "${myHOME}/.ssh/id_rsa.pub"
 verifyPermisions 644 "${myHOME}/.ssh/known_hosts"

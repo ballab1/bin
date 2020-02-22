@@ -31,7 +31,7 @@ alias rcc='docker-utilities remoteLocal'
 
 
 alias rlg='dockerRunLogs'
-alias tmux='tmux -f ~/.tmux/tmux.conf'
+alias tmux='/usr/bin/tmux -f ~/.tmux/tmux.conf'
 alias dockviz='docker run -it --rm -v /var/run/docker.sock:/var/run/docker.sock nate/dockviz'
 alias kc='kubectl'
 
