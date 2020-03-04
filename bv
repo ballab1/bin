@@ -1,0 +1,15 @@
+#!/bin/bash
+
+function getTokens() {
+  ######## | *removeUnwantedLines*      | *removeTrailingSpaces, separateTokens* | *removeUnwantedLines*      | *identifyTokens* | *removeTokenStart,     removeTokenEndings,       setKeyValDelim,          fixUndefinedTokens*
+  cat "$1" | grep -vE '^((\s*)|(#.*))$' | sed -E -e 's|\s+$||'   -e 's|\$|\n$|g' | grep -vE '^((\s*)|(#.*))$' | grep '\$'        | sed -E -e 's|^\$\{?||' -e 's|"||' -e 's|\}.*$||' -e 's|:-|=|' -e 's|:|=|' -e 's|^([^=]+)=?$|\1=?|'
+}
+
+# Use the Unofficial Bash Strict Mode
+set -o errexit
+set -o nounset
+set -o pipefail
+IFS=$'\n\t'
+
+declare -r file="${1:?}"
+getTokens "$file" | grep -Ev 'CONTAINER_TAG|DEV_TEAM' | sort -u
