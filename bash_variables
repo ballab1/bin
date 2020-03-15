@@ -10,9 +10,9 @@ export HUB_PROTOCOL=https
 export GRADLE_USER_HOME=/home/bobb
 
 export KAFKA_CLUSTER='home'
-export KAFKA_AVRO_HOSTS=s3.ubuntu.home,s4.ubuntu.home
-export KAFKA_BOOTSTRAP_SERVERS=s3.ubuntu.home:9092,s4.ubuntu.home:9092
-export ZOOKEEPER_HOSTS=s3.ubuntu.home:2181,s4.ubuntu.home:2181 
+export KAFKA_AVRO_HOSTS=s3.ubuntu.home,s4.ubuntu.home,s8.ubuntu.home
+export KAFKA_BOOTSTRAP_SERVERS=s3.ubuntu.home:9092,s4.ubuntu.home:9092,s8.ubuntu.home:9092
+export ZOOKEEPER_HOSTS=s3.ubuntu.home:2181,s4.ubuntu.home:2181,s8.ubuntu.home:2181
    
 
 export GIT_PS1_SHOWDIRTYSTATE=1
