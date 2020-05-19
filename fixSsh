@@ -9,6 +9,7 @@ function verifyPermisions()
     local perms="${1:?}"
     local file="${2:?}"
 
+    [ -e "$file" ] || return 0 
     if [ "$(stat --format '%a %u:%g' "$file")" != "${perms} ${myUID}:$myGID" ]; then
         echo -n "fixing '$file':: was $(stat --format '%A %U:%G' "$file")" 
         sudo chown "${myUID}:$myGID" "$file"
@@ -24,6 +25,6 @@ verifyPermisions 700 "${myHOME}/.ssh"
 
 verifyPermisions 600 "${myHOME}/.ssh/authorized_keys"
 verifyPermisions 600 "${myHOME}/.ssh/id_rsa"
-[ -e "${myHOME}/.ssh/config" ] && verifyPermisions 600 "${myHOME}/.ssh/config"
+verifyPermisions 600 "${myHOME}/.ssh/config"
 verifyPermisions 644 "${myHOME}/.ssh/id_rsa.pub"
 verifyPermisions 644 "${myHOME}/.ssh/known_hosts"

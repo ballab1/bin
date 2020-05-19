@@ -17,10 +17,10 @@ function fileData() {
     local tob="${stat_vals['time_of_birth']}"
     [ "$tob" = '-' ] && tob='unknown'
 
-    echo -n '{"name":"'"$name"'",' \
-            '"folder":"'"$folder"'",' \
-            '"mount_point":"'"${stat_vals['mount_point']}"'",' \
-            '"mount_source":"'"$mount_source"'",'
+    echo -n '{"name":"'"$(escape "$name")"'",' \
+             '"folder":"'"$(escape "$folder")"'",' \
+             '"mount_point":"'"${stat_vals['mount_point']}"'",' \
+             '"mount_source":"'"$mount_source"'",'
 
     if [ -h "$file" ]; then
         local ref2="$(readlink -f "$file" 2>/dev/null ||:)"
@@ -60,6 +60,13 @@ function fileData() {
                       '"last_status_change__HRF":"%z"}\n' )
 
     stat --printf="$(echo ${fields[*]})" "$file"
+}
+
+#-----------------------------------------------------------------------------------------------
+function escape() {
+set -x
+     python3 -c "import sys; x = sys.stdin.read(); x = x.rstrip(); print (x.encode('ascii', 'xmlcharrefreplace'));" < <(echo $1)
+set +x
 }
 
 #-----------------------------------------------------------------------------------------------
@@ -167,7 +174,13 @@ function test1() {
     local -i i=0
     for file in "$@"; do
 #        [[ $(( i++ )) -ge 9 || $i -le 10 ]] || continue
-        fileData "$file"
+        if [ -d "$file" ]; then
+            pushd "$file" > /dev/null
+            fileData *
+            popd
+        else
+            fileData "$file" > /dev/null
+        fi
     done
 }
 #-----------------------------------------------------------------------------------------------
@@ -188,6 +201,7 @@ fi
 source "$loader"
 appenv.loader 'artifactory.search'
 
+test1 '/mnt/Synology/Public/Shared Music/Sigur'*
 #test1 '/mnt/Synology/Guest/All Users/Music/Barenaked Ladies/Rock Spectacle'/*
 #test2
 #(cd '/mnt/Synology/Guest/All Users/Music/Jojo/Jojo'; test1 *)
@@ -197,4 +211,4 @@ appenv.loader 'artifactory.search'
 # test1 *
 # rm 'this is a quoted "string", isn'"'"'t it'
 #)
-(cd '/home/bobb/xsrc'; test1 *)
+#(cd '/home/bobb/xsrc'; test1 *)
