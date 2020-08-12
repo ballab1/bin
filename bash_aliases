@@ -16,7 +16,7 @@ alias dnt='docker-utilities show --networks'
 alias dps='docker-utilities show --processes'
 alias roc='docker-utilities clean'
 alias getImage='docker-utilities getImage'
-
+alias kafkacat='/usr/bin/kafkacat -b "$KAFKA_BOOTSTRAP_SERVERS"'
 
 alias dut='docker-utilities'
 
