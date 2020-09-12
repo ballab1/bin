@@ -262,8 +262,8 @@ EOF
 function systemSetup.18_updateUsersAndGroups() {
     echo 'Updating users and groups'
 
-    [ "$(getent passwd www-data)" ] || systemSetup.run usermod  --uid 82 www-data
-    systemSetup.run groupmod --gid 82 www-data
+    [ "$(getent passwd www-data)" ] || systemSetup.run usermod  --uid 33 www-data
+    systemSetup.run groupmod --gid 33 www-data
     [ "$(getent group mysql)" ] || systemSetup.run groupadd --gid 909 mysql
 
     [ "$(getent group nginx)" ] || systemSetup.run groupadd --gid 1001 nginx
@@ -278,7 +278,7 @@ function systemSetup.18_updateUsersAndGroups() {
     [ "$(getent group webdav)" ] || systemSetup.run groupadd --gid 2222 webdav
     [ "$(getent passwd webdav)" ] || systemSetup.run useradd --no-create-home --gid 2222 --uid 2222 --shell /sbin/nologin webdav 
 
-    systemSetup.run usermod --groups docker,jenkins,nginx,nagios,www-data,webdav "$myNAME"
+    systemSetup.run usermod --groups "$myNAME",docker,jenkins,nginx,nagios,www-data,webdav "$myNAME"
 }
 
 #----------------------------------------------------------------------------
@@ -306,6 +306,24 @@ nas.home:/volume1/ubuntu /mnt/ubuntu nfs vers=4
 /mnt/ubuntu /home/bobb/src        none    bind
 EOF
     mount -a ||:
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.20_pythonSupport() {
+
+    [ "$(which pip)" ] && (python -c "import yaml; print(yaml.__version__)" &> /dev/null) && return 0
+
+
+    echo 'Setting up YAML support via python'
+    if [ -z "$(which pip)" ]; then
+        curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+        python get-pip.py
+        rm get-pip.py
+    fi
+
+    (python -c "import yaml; print(yaml.__version__)" &> /dev/null) && return 0
+    pip install pyyaml==5.3.1
+    python -c "import yaml; print(yaml.__version__)"
 }
 
 #----------------------------------------------------------------------------
@@ -430,7 +448,7 @@ set -o nounset
 set -o pipefail
 IFS=$'\n\t'
 
-declare -r DC_COMPOSE_VER=1.26.2
+declare -r DC_COMPOSE_VER=1.27.2
 declare -r CRYP_SECRET=~/.crypt-key
 declare -r USER_INFO_FILE=/tmp/userInfo
 declare -r PROGNAME="$(basename "${BASH_SOURCE[0]}")"
