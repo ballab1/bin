@@ -66,15 +66,15 @@ function systemSetup.05_setupRegistryAccess() {
     mkdir -p "$(dirname "$daemonFile")" ||:
     if [ ! -f "$daemonFile" ]; then
         echo "Updating $daemonFile"
-        echo '{ "insecure-registries":["ubuntu-s2.home:5000","s2.ubuntu.home:5000","10.1.3.12:5000"] }' > "${daemonFile}.tmp"
+        echo '{ "insecure-registries":["ubuntu-s2.home:5000","s2.ubuntu.home:5000","10.3.1.12:5000"] }' > "${daemonFile}.tmp"
 
     elif [ "$(jq 'has("insecure-registries")')" != 'true' ]; then
         echo "Updating $daemonFile"
-        jq '. + { "insecure-registries":["ubuntu-s2.home:5000","s2.ubuntu.home:5000","10.1.3.12:5000"] }' "$daemonFile" > "${daemonFile}.tmp"
+        jq '. + { "insecure-registries":["ubuntu-s2.home:5000","s2.ubuntu.home:5000","10.3.1.12:5000"] }' "$daemonFile" > "${daemonFile}.tmp"
 
-    elif [ "$(jq '."insecure-registries"[]|contains( ""ubuntu-s2.home:5000","s2.ubuntu.home:5000","10.1.3.12:5000"" )' "$daemonFile")" != 'true' ]; then
+    elif [ "$(jq '."insecure-registries"[]|contains( ""ubuntu-s2.home:5000","s2.ubuntu.home:5000","10.3.1.12:5000"" )' "$daemonFile")" != 'true' ]; then
         echo "Updating $daemonFile"
-        jq 'map_values(. +  ["ubuntu-s2.home:5000","s2.ubuntu.home:5000","10.1.3.12:5000""] )' "$daemonFile" > "${daemonFile}.tmp"
+        jq 'map_values(. +  ["ubuntu-s2.home:5000","s2.ubuntu.home:5000","10.3.1.12:5000""] )' "$daemonFile" > "${daemonFile}.tmp"
 
     else
         return 0
@@ -299,8 +299,8 @@ function systemSetup.19_networkMounts() {
 
     cat << EOF >> "$target"
 #
-10.1.3.4:/volume1/WdMyCloud /mnt/Synology nfs vers=4
-10.1.3.5:/nfs /mnt/WDMyCloud nfs vers=3
+#10.3.1.4:/volume1/WdMyCloud /mnt/Synology nfs vers=4
+#10.3.1.5:/nfs /mnt/WDMyCloud nfs vers=3
 #
 nas.home:/volume1/ubuntu /mnt/ubuntu nfs vers=4
 /mnt/ubuntu /home/bobb/src        none    bind
