@@ -321,8 +321,9 @@ function systemSetup.20_pythonSupport() {
         rm get-pip.py
     fi
 
+
     (python -c "import yaml; print(yaml.__version__)" &> /dev/null) && return 0
-    pip install pyyaml==5.3.1
+    pip install pyyaml==5.3.1 confluent_kafka==1.5.0
     python -c "import yaml; print(yaml.__version__)"
 }
 
