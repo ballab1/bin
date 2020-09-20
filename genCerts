@@ -1,0 +1,114 @@
+#!/bin/bash
+
+# Certificate generation process consists of three steps:
+#    (1) generate a strong private key
+#    (2) create a Certificate Signing Request (CSR) and send it to a CA
+#    (3) install the CA-provided certificate in your web server
+
+
+declare -r PASSPHRASE='pass:wxyz'
+declare -r CERTS_DIR=~/.inf/ssl
+declare -r PARAM_PEM="${CERTS_DIR}/dhparam.pem"
+declare -r SERVER_CRT="${CERTS_DIR}/server.crt"
+declare -r SERVER_CSR="${CERTS_DIR}/server.csr"
+declare -r SERVER_KEY="${CERTS_DIR}/server.key"
+declare -r SERVER_P12="${CERTS_DIR}/server.p12"
+declare TMP_DIR
+
+declare -r PGM_DIR="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
+
+
+function csrConfig() {
+
+    local tmp_script="${TMP_DIR}/csr.conf"
+
+cat << EOF > "$tmp_script" 
+[ req ]
+default_bits = 2048
+default_md = sha256
+distinguished_name = dn
+prompt = no
+req_extensions = req_ext
+
+[ dn ]
+C = US
+ST = Canonical
+L = Canonical
+O = Canonical
+OU = Canonical
+CN = 127.0.0.1
+
+[ req_ext ]
+subjectAltName = @alt_names
+
+[ v3_ext ]
+authorityKeyIdentifier=keyid,issuer:always
+basicConstraints=CA:FALSE
+keyUsage=keyEncipherment,dataEncipherment,digitalSignature
+extendedKeyUsage=serverAuth,clientAuth
+subjectAltName=@alt_names
+
+[ alt_names ]
+DNS.1 = *.home
+IP.1 = 127.0.0.1
+EOF
+    echo "$tmp_script"
+}
+
+function onExit() {
+    [ "${TMP_DIR:-}" ] || return
+    [ -d "${TMP_DIR}" ] || return
+    [ "${TMP_DIR}" = '/' ] && return
+    rm -rf "${TMP_DIR}" ||:
+}
+
+
+function main() {
+
+    # Use the Unofficial Bash Strict Mode
+    set -o errexit
+    set -o nounset
+    set -o pipefail
+    IFS=$'\n\t'
+
+
+    if [ ! -e "${PGM_DIR}/trap.bashlib" ] || [ ! -e "${PGM_DIR}/term.bashlib" ]; then
+        echo 'Unable to load libraries' >&2
+        exit
+    fi
+
+    source "${PGM_DIR}/trap.bashlib" 
+    source "${PGM_DIR}/term.bashlib" 
+    trap onExit EXIT
+
+    term.log '>> GENERATING SSL CERT\n' 'lt_magenta'
+
+    TMP_DIR=$(mktemp -d)
+    local -r pass_key="${TMP_DIR}/server.pass.key"
+
+    # generate a 2048-bit RSA key file
+    openssl genrsa -des3 -passout "$PASSPHRASE" -out "$pass_key" 2048
+
+    # use OASS_KEY to generate our server key
+    openssl rsa -passin "$PASSPHRASE" -in "$pass_key" -out "$SERVER_KEY"
+    # display contents of our key
+#    openssl pkey -text -in "$SERVER_KEY" -noout
+
+    openssl dhparam -out "$PARAM_PEM" 2048
+
+    # generate a new Certificate Signing Request (CSR) file using our key
+    openssl req -new -config "$(csrConfig)" -key "$SERVER_KEY" -out "$SERVER_CSR"
+    
+    # Signing our own Certificates
+    openssl x509 -req -sha256 -days 300065 -in "$SERVER_CSR" -signkey "$SERVER_KEY" -out "$SERVER_CRT"
+
+    # create file to import into a keystore
+    openssl pkcs12 -export -caname root -name "My Certificate" -password "$PASSPHRASE" -in "$SERVER_CRT" -inkey server.key -out "$SERVER_P12"
+
+    term.log '>> GENERATING SSL CERT ... DONE\n' 'lt_magenta'
+
+    # display contents of our own Certificates
+    openssl x509 -text -in "$SERVER_CRT" -noout
+}
+
+main "$@"
