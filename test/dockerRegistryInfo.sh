@@ -2,7 +2,7 @@
 
 declare -i index
 declare image
-declare baseUrl='http://ubuntu-s2.home:5000'
+declare baseUrl='http://s2.ubuntu.home:5000'
 declare credentials="$(< ~/.inf/secrets/credentials.github)"
 
 declare start=$(date +%s)

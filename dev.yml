@@ -12,13 +12,13 @@ services:
             CRYPT_FILE: /run/secrets/.crypt-key
         extra_hosts:
             - "ubuntu-s1:10.3.1.11"
-            - "ubuntu-s2:10.3.1.12"
+            - "s2.ubuntu.home:10.3.1.12"
             - "ubuntu-s3:10.3.1.6"
             - "ubuntu-s4:10.3.1.10" 
             - "ubuntu-s5:10.3.1.14" 
             - "ubuntu-s5:10.3.1.15" 
         hostname: dev
-        image: ${DOCKER_REGISTRY:-ubuntu-s2.home:5000/}${CONTAINER_OS:-alpine}/build_container:${CONTAINER_TAG:-latest}
+        image: ${DOCKER_REGISTRY:-s2.ubuntu.home:5000/}${CONTAINER_OS:-alpine}/build_container:${CONTAINER_TAG:-latest}
         logging:
             driver: json-file
             options:

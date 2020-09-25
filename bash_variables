@@ -2,7 +2,7 @@
 [ -d ~/GIT/other/bats_root ] && export BATS_ROOT=$( readlink -f ~/GIT/other/bats_root )
 [ -d ~/.tmux/tmp ] && export TMUX_TMPDIR=$( readlink -f ~/.tmux/tmp ) 
 
-export DOCKER_REGISTRY=ubuntu-s2.home:5000/
+export DOCKER_REGISTRY=s2.ubuntu.home:5000/
 export GITHUB_HOST=eos2git.cec.lab.emc.com
 export GITHUB_USER=ballab1
 export HUB_PROTOCOL=https

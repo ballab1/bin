@@ -8,11 +8,13 @@
 
 declare -r PASSPHRASE='pass:wxyz'
 declare -r CERTS_DIR=~/.inf/ssl
-declare -r PARAM_PEM="${CERTS_DIR}/dhparam.pem"
-declare -r SERVER_CRT="${CERTS_DIR}/server.crt"
-declare -r SERVER_CSR="${CERTS_DIR}/server.csr"
 declare -r SERVER_KEY="${CERTS_DIR}/server.key"
-declare -r SERVER_P12="${CERTS_DIR}/server.p12"
+declare -r SERVER_CSR="${CERTS_DIR}/server.csr"
+declare -r SERVER_CRT="${CERTS_DIR}/server.crt"
+declare -r PARAM_PEM="${CERTS_DIR}/dhparam.pem"
+declare -ri KEYLENGTH=2048
+declare -ri VALID_DAYS=300065
+
 declare TMP_DIR
 
 declare -r PGM_DIR="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
@@ -24,7 +26,7 @@ function csrConfig() {
 
 cat << EOF > "$tmp_script" 
 [ req ]
-default_bits = 2048
+default_bits = $KEYLENGTH
 default_md = sha256
 distinguished_name = dn
 prompt = no
@@ -84,26 +86,24 @@ function main() {
     term.log '>> GENERATING SSL CERT\n' 'lt_magenta'
 
     TMP_DIR=$(mktemp -d)
-    local -r pass_key="${TMP_DIR}/server.pass.key"
+    local -r rsa_keyfile="${TMP_DIR}/server.pass.key"
 
-    # generate a 2048-bit RSA key file
-    openssl genrsa -des3 -passout "$PASSPHRASE" -out "$pass_key" 2048
 
-    # use OASS_KEY to generate our server key
-    openssl rsa -passin "$PASSPHRASE" -in "$pass_key" -out "$SERVER_KEY"
+    # generate a "$KEYLENGTH-bit" RSA key file
+    openssl genrsa -des3 -passout "$PASSPHRASE" "$KEYLENGTH" -out "$rsa_keyfile"
+
+    # use rsa_keyfile to generate our server key
+    openssl rsa -passin "$PASSPHRASE" -in "$rsa_keyfile" -out "$SERVER_KEY"
     # display contents of our key
 #    openssl pkey -text -in "$SERVER_KEY" -noout
 
-    openssl dhparam -out "$PARAM_PEM" 2048
+    openssl dhparam "$KEYLENGTH" -out "$PARAM_PEM"
 
     # generate a new Certificate Signing Request (CSR) file using our key
     openssl req -new -config "$(csrConfig)" -key "$SERVER_KEY" -out "$SERVER_CSR"
     
     # Signing our own Certificates
-    openssl x509 -req -sha256 -days 300065 -in "$SERVER_CSR" -signkey "$SERVER_KEY" -out "$SERVER_CRT"
-
-    # create file to import into a keystore
-    openssl pkcs12 -export -caname root -name "My Certificate" -password "$PASSPHRASE" -in "$SERVER_CRT" -inkey server.key -out "$SERVER_P12"
+    openssl x509 -req -sha256 -days "$VALID_DAYS" -extensions root_exts -in "$SERVER_CSR" -signkey "$SERVER_KEY" -out "$SERVER_CRT"
 
     term.log '>> GENERATING SSL CERT ... DONE\n' 'lt_magenta'
 

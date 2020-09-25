@@ -2,7 +2,7 @@
 
 declare image=${1:?}
 
-declare REGISTRY_SERVER=ubuntu-s2.home:5000
+declare REGISTRY_SERVER=s2.ubuntu.home:5000
 
 [ "$(docker image ls -q $image)" ] || docker pull "$image"
 docker tag "$image" "${REGISTRY_SERVER}/${image##*/}"
