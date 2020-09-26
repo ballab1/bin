@@ -6,14 +6,10 @@
 #    (3) install the CA-provided certificate in your web server
 
 
-declare -r PASSPHRASE='pass:wxyz'
-declare -r CERTS_DIR=~/.inf/ssl
-declare -r SERVER_KEY="${CERTS_DIR}/server.key"
-declare -r SERVER_CSR="${CERTS_DIR}/server.csr"
-declare -r SERVER_CRT="${CERTS_DIR}/server.crt"
-declare -r PARAM_PEM="${CERTS_DIR}/dhparam.pem"
 declare -ri KEYLENGTH=2048
 declare -ri VALID_DAYS=300065
+declare -r PASSPHRASE='pass:wxyz'
+declare -r CERTS_DIR=~/.inf/ssl
 
 declare TMP_DIR
 
@@ -51,7 +47,17 @@ extendedKeyUsage=serverAuth,clientAuth
 subjectAltName=@alt_names
 
 [ alt_names ]
-DNS.1 = *.home
+DNS.1 = s2.ubuntu.home
+DNS.2 = s3.ubuntu.home
+DNS.3 = s4.ubuntu.home
+DNS.4 = s5.ubuntu.home
+DNS.5 = s6.ubuntu.home
+DNS.6 = s7.ubuntu.home
+DNS.7 = s8.ubuntu.home
+DNS.8 = wdmycloud.home
+DNS.9 = nas.home
+DNS.10 = *.ubuntu.home
+DNS.11 = *.home
 IP.1 = 127.0.0.1
 EOF
     echo "$tmp_script"
@@ -83,6 +89,12 @@ function main() {
     source "${PGM_DIR}/term.bashlib" 
     trap onExit EXIT
 
+
+    local -r SERVER_KEY="${CERTS_DIR}/server.key"
+    local -r SERVER_CSR="${CERTS_DIR}/server.csr"
+    local -r SERVER_CRT="${CERTS_DIR}/server.crt"
+    local -r PARAM_PEM="${CERTS_DIR}/dhparam.pem"
+
     term.log '>> GENERATING SSL CERT\n' 'lt_magenta'
 
     TMP_DIR=$(mktemp -d)
@@ -90,25 +102,44 @@ function main() {
 
 
     # generate a "$KEYLENGTH-bit" RSA key file
-    openssl genrsa -des3 -passout "$PASSPHRASE" "$KEYLENGTH" -out "$rsa_keyfile"
+    echo
+    echo "openssl genrsa -des3 -passout $PASSPHRASE -out $rsa_keyfile $KEYLENGTH"
+    openssl genrsa -des3 -passout "$PASSPHRASE" -out "$rsa_keyfile" "$KEYLENGTH"
 
     # use rsa_keyfile to generate our server key
+    echo
+    echo "openssl rsa -passin $PASSPHRASE -in $rsa_keyfile -out $SERVER_KEY"
     openssl rsa -passin "$PASSPHRASE" -in "$rsa_keyfile" -out "$SERVER_KEY"
     # display contents of our key
+#    echo
+#    echo "openssl pkey -text -in $SERVER_KEY -noout'
 #    openssl pkey -text -in "$SERVER_KEY" -noout
 
+    echo
+    echo "openssl dhparam $KEYLENGTH -out $PARAM_PEM"
     openssl dhparam "$KEYLENGTH" -out "$PARAM_PEM"
 
+    local cnf="$(csrConfig)"
+
     # generate a new Certificate Signing Request (CSR) file using our key
-    openssl req -new -config "$(csrConfig)" -key "$SERVER_KEY" -out "$SERVER_CSR"
+    echo
+    echo "openssl req -new -config $cnf -key $SERVER_KEY -extensions req_ext -out $SERVER_CSR"
+    openssl req -new -config "$cnf" -key "$SERVER_KEY" -extensions req_ext -out "$SERVER_CSR"
     
     # Signing our own Certificates
-    openssl x509 -req -sha256 -days "$VALID_DAYS" -extensions root_exts -in "$SERVER_CSR" -signkey "$SERVER_KEY" -out "$SERVER_CRT"
+    echo
+    echo "openssl x509 -req -sha256 -days $VALID_DAYS -in $SERVER_CSR -extensions v3_ext -signkey $SERVER_KEY -out $SERVER_CRT"
+    openssl x509 -req -sha256 -days "$VALID_DAYS" -in "$SERVER_CSR" -extfile "$cnf" -extensions v3_ext -signkey "$SERVER_KEY" -out "$SERVER_CRT"
 
     term.log '>> GENERATING SSL CERT ... DONE\n' 'lt_magenta'
 
     # display contents of our own Certificates
-    openssl x509 -text -in "$SERVER_CRT" -noout
+#    echo
+#    echo "openssl req -in $SERVER_CSR -noout -text"
+#    openssl req -in "$SERVER_CSR" -noout -text
+    echo
+    echo "openssl x509 -text -ext extendedKeyUsage -in $SERVER_CRT -noout"
+    openssl x509 -text -ext extendedKeyUsage -in "$SERVER_CRT" -noout
 }
 
 main "$@"
