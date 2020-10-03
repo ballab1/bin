@@ -1,6 +1,6 @@
 [user]
     name = Ballantyne, Bob
-    email = bob.ballantyne@emc.com
+    email = ballantyne.robert@gmail.com
 [include]
     path = /home/bobb/.enterprise/config.include
 [credential]

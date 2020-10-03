@@ -1,6 +1,7 @@
 #!/bin/bash
 
-cat << EOF > /dev/null
+if [ $# -eq 0 ]; then
+  cat << EOF
 Usage: kafkacat <options> [file1 file2 .. | topic1 topic2 ..]]
 kafkacat - Apache Kafka producer and consumer tool
 https://github.com/edenhill/kafkacat
@@ -174,8 +175,10 @@ Query offset by timestamp:
   kafkacat -Q -b broker -t <topic>:<partition>:<timestamp>
 
 EOF
+exit 1
+fi
+declare option=$1
+shift
 
 #docker run ${DOCKER_REGISTRY:-s2.ubuntu.home:5000/}thirdparty/kafkacat:latest kafkacat -L -b $KAFKA_BOOTSTRAP_SERVERS
-docker run ${DOCKER_REGISTRY:-s2.ubuntu.home:5000/}thirdparty/kafkacat:latest kafkacat -b $KAFKA_BOOTSTRAP_SERVERS
-
-
+docker run ${DOCKER_REGISTRY:-s2.ubuntu.home:5000/}thirdparty/kafkacat:latest kafkacat $option -b $KAFKA_BOOTSTRAP_SERVERS "$@"
