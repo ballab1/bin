@@ -171,7 +171,7 @@ function systemSetup.14_getGitRepos() {
         else
             systemSetup.run git clone --recurse-submodules "${repoInfo[0]}" "$dir"
         fi
-        chown "${myUID}:$myGID" -R "$dir" "$dir"/.*
+        find "$dir" -exec chown "${myUID}:$myGID" '{}' \;
     done
 }
 
@@ -181,7 +181,7 @@ function systemSetup.15_redirectOwnBashFiles() {
                        ["${myHOME}/.bash_logout"]="${myHOME}/.bin/bash_logout"
                        ["${myHOME}/.bashrc"]="${myHOME}/.bin/bashrc"
                        ["${myHOME}/.gitconfig"]="${myHOME}/.bin/gitconfig"
-                       ["${myHOME}/.tmux.conf"]="${myHOME}/.bin/tmux.conf"
+                       ["${myHOME}/.tmux.conf"]="${myHOME}/.tmux/tmux.conf"
                        ['/usr/local/bin/git-crypt']="${myHOME}/.bin/$(uname -p)/git-crypt"
                       )
     local -i isDone=0
@@ -254,6 +254,7 @@ cat << EOF
    - include dns '.home' suffix
 
   then run netplan try
+  set hostname using:  hostnamectl set-hostname s2.ubuntu.home
   verify with hostname -s, hostname -f, systemd-resolve --status
 EOF
 }
