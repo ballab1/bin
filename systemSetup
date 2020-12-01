@@ -29,9 +29,9 @@ function systemSetup.02_requiredPackages() {
     add-apt-repository universe
     apt-get update
     systemSetup.run apt-get install -y build-essential nfs-common nfs-kernel-server tasksel libxml2 libxml2-dev
-    systemSetup.run apt-get install -y python-pip openjdk-8-jre-headless cifs-utils
-    systemSetup.run apt-get install -y librdkafka++1 librdkafka1 python-confluent-kafka
-    systemSetup.run apt-get install -y docker-compose jq
+    systemSetup.run apt-get install -y openjdk-8-jre-headless cifs-utils docker-compose jq
+    systemSetup.run apt-get install -y python3 python-pip
+    systemSetup.run apt-get install -y librdkafka++1 librdkafka1 python3-confluent-kafka
 }
 
 #----------------------------------------------------------------------------
@@ -66,15 +66,15 @@ function systemSetup.05_setupRegistryAccess() {
     mkdir -p "$(dirname "$daemonFile")" ||:
     if [ ! -f "$daemonFile" ]; then
         echo "Updating $daemonFile"
-        echo '{ "insecure-registries":["s2.ubuntu.home:5000","s2.ubuntu.home:5000","10.3.1.12:5000"] }' > "${daemonFile}.tmp"
+        echo '{ "insecure-registries":["s2.ubuntu.home:5000","s2-ubuntu.home:5000","10.3.1.12:5000"] }' > "${daemonFile}.tmp"
 
     elif [ "$(jq 'has("insecure-registries")')" != 'true' ]; then
         echo "Updating $daemonFile"
-        jq '. + { "insecure-registries":["s2.ubuntu.home:5000","s2.ubuntu.home:5000","10.3.1.12:5000"] }' "$daemonFile" > "${daemonFile}.tmp"
+        jq '. + { "insecure-registries":["s2.ubuntu.home:5000","s2-ubuntu.home:5000","10.3.1.12:5000"] }' "$daemonFile" > "${daemonFile}.tmp"
 
-    elif [ "$(jq '."insecure-registries"[]|contains( ""s2.ubuntu.home:5000","s2.ubuntu.home:5000","10.3.1.12:5000"" )' "$daemonFile")" != 'true' ]; then
+    elif [ "$(jq '."insecure-registries"[]|contains( ""s2.ubuntu.home:5000","s2-ubuntu.home:5000","10.3.1.12:5000"" )' "$daemonFile")" != 'true' ]; then
         echo "Updating $daemonFile"
-        jq 'map_values(. +  ["s2.ubuntu.home:5000","s2.ubuntu.home:5000","10.3.1.12:5000""] )' "$daemonFile" > "${daemonFile}.tmp"
+        jq 'map_values(. +  ["s2.ubuntu.home:5000","s2-ubuntu.home:5000","10.3.1.12:5000"] )' "$daemonFile" > "${daemonFile}.tmp"
 
     else
         return 0
