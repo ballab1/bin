@@ -3,12 +3,12 @@
 #----------------------------------------------------------------------------
 function systemSetup.ALL() {
     local method
-    for method in "$(systemSetup.functions | grep -E '\d' | LC_ALL=C sort)"; do
+    for method in $(systemSetup.functions | grep -E '\d' | LC_ALL=C sort); do
         {
             echo
             echo "systemSetup.${method//. /_}"
         } >&2
-        systemSetup.${method//. /_}
+        systemSetup."${method//. /_}"
     done
 }
 
@@ -66,15 +66,15 @@ function systemSetup.05_setupRegistryAccess() {
     mkdir -p "$(dirname "$daemonFile")" ||:
     if [ ! -f "$daemonFile" ]; then
         echo "Updating $daemonFile"
-        echo '{ "insecure-registries":["s2.ubuntu.home:5000","s2-ubuntu.home:5000","10.3.1.12:5000"] }' > "${daemonFile}.tmp"
+        echo '{ "insecure-registries":["s2.ubuntu.home:5000","ubuntu-s2.home:5000","10.3.1.12:5000"] }' > "${daemonFile}.tmp"
 
     elif [ "$(jq 'has("insecure-registries")')" != 'true' ]; then
         echo "Updating $daemonFile"
-        jq '. + { "insecure-registries":["s2.ubuntu.home:5000","s2-ubuntu.home:5000","10.3.1.12:5000"] }' "$daemonFile" > "${daemonFile}.tmp"
+        jq '. + { "insecure-registries":["s2.ubuntu.home:5000","ubuntu-s2.home:5000","10.3.1.12:5000"] }' "$daemonFile" > "${daemonFile}.tmp"
 
-    elif [ "$(jq '."insecure-registries"[]|contains( ""s2.ubuntu.home:5000","s2-ubuntu.home:5000","10.3.1.12:5000"" )' "$daemonFile")" != 'true' ]; then
+    elif [ "$(jq '."insecure-registries"[]|contains( "\"s2.ubuntu.home:5000\",\"ubuntu-s2.home:5000\",\"10.3.1.12:5000\"" )' "$daemonFile")" != 'true' ]; then
         echo "Updating $daemonFile"
-        jq 'map_values(. +  ["s2.ubuntu.home:5000","s2-ubuntu.home:5000","10.3.1.12:5000"] )' "$daemonFile" > "${daemonFile}.tmp"
+        jq 'map_values(. +  ["s2.ubuntu.home:5000","ubuntu-s2.home:5000","10.3.1.12:5000"] )' "$daemonFile" > "${daemonFile}.tmp"
 
     else
         return 0
@@ -91,10 +91,17 @@ function systemSetup.06_exposeDockerRestAPI() {
     echo 'Exposing docker REST API'
     echo -e '\e[93msed -iE '"'"'s|^(ExecStart=/usr/bin/dockerd -H fd://)(.*)$|\1 -H tcp://0.0.0.0:4243\2|'"' $target"'\e[0m'
     sed -i -E 's|^(ExecStart=/usr/bin/dockerd -H fd://)(.*)$|\1 -H tcp://0.0.0.0:4243\2|' "$target"
-    chmod a+rw /run/docker.sock
-    usermod --append --groups docker "${myUID}"
     systemSetup.run systemctl daemon-reload
     systemSetup.run systemctl restart docker
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.09_USER() {
+    if [[ ${myUID:-} || ${myGID:-} ]]; then
+        echo 'looks like user alread setup'
+        return 0
+    fi
+    systemSetup.run userADD --create-home --gid users --GROUPS docker jenkins www --shell bash bobb
 }
 
 #----------------------------------------------------------------------------
@@ -114,11 +121,11 @@ function systemSetup.11_installGitLFS() {
 
 #----------------------------------------------------------------------------
 function systemSetup.12_jenkinsSlaveFolders() {
-    if [ -z ${myUID:-} ]; then
+    [[ -d /home/jenkins.s3 && -d /home/jenkins.s4 ]] && return 0
+    if [ -z "${myUID:-}" ]; then
         echo 'need to run this from non-user'
         return 0
     fi
-    [[ -d /home/jenkins.s3 && -d /home/jenkins.s4 ]] && return 0
 
     echo 'make directories for Jenkins Slaves'
     systemSetup.run mkdir -p /home/jenkins.s3 ||:
@@ -129,11 +136,11 @@ function systemSetup.12_jenkinsSlaveFolders() {
 #----------------------------------------------------------------------------
 function systemSetup.13_updatePerlSupport() {
     false || return 0    # skip this
-
     if [[ -z ${myUID:-} || -z ${myGID:-} || -z ${myHOME:-} ]]; then
         echo 'need to run this from non-user'
         return 0
     fi
+
     [ -d "${myHOME}/.cpan" ] && return 0
     echo 'Adding needed PERL modules'
     systemSetup.run "cpan -i XML::LibXML <<< $(echo 'yes')"
@@ -142,10 +149,6 @@ function systemSetup.13_updatePerlSupport() {
 
 #----------------------------------------------------------------------------
 function systemSetup.14_getGitRepos() {
-    if [[ -z ${myUID:-} || -z ${myGID:-} || -z ${myHOME:-} ]]; then
-        echo 'need to run this from non-user'
-        return 0
-    fi
     local -A repos=(["${myHOME}/.enterprise"]='https://github.com/ballab1/enterprise-config-for-git ballab1'
                     ["${myHOME}/.work"]='https://github.com/ballab1/work-stuff'
                     ["${myHOME}/GIT/other/git-submodule-tools"]='https://github.com/ballab1/git-submodule-tools'
@@ -159,6 +162,10 @@ function systemSetup.14_getGitRepos() {
         [ -d "$dir" ] || isDone=1
     done
     [ $isDone -eq 0 ] && return 0 
+    if [[ -z ${myUID:-} || -z ${myGID:-} || -z ${myHOME:-} ]]; then
+        echo 'need to run this from non-user'
+        return 0
+    fi
 
     echo 'setting up standard GIT repos'
     local -a repoInfo
@@ -191,6 +198,10 @@ function systemSetup.15_redirectOwnBashFiles() {
         isDone=1
     done
     [ $isDone -eq 0 ] && return 0 
+    if [[ -z ${myUID:-} || -z ${myGID:-} || -z ${myHOME:-} ]]; then
+        echo 'need to run this from non-user'
+        return 0
+    fi
 
     echo 'Redirect own BASH files'
     for link in "${!symlinks[@]}"; do
@@ -202,6 +213,12 @@ function systemSetup.15_redirectOwnBashFiles() {
 
 #----------------------------------------------------------------------------
 function systemSetup.16_unencryptRepos() {
+    if [ -z "$(which git-crypt)" ]]; then
+        if [ ! -e "${myHOME}/.bin/$(uname -m)/git-crypt" ]; then
+            echo 'need "git-crpyt" installed before running'
+            return 0
+        fi
+    fi
     if [ ! -e $CRYP_SECRET ]; then
         echo 'need to obtain secret key before running'
         return 0
@@ -215,6 +232,7 @@ function systemSetup.16_unencryptRepos() {
                        "${myHOME}/.ssh"
                       )
 
+    [ -z "$(which git-crypt)" ] && systemSetup.run sudo ln -s "${myHOME}/.bin/$(uname -m)/git-crypt" /usr/local/git-crypt
     local dir
     for dir in "${repoDirs[@]}"; do
         pushd "$dir"
@@ -326,6 +344,28 @@ function systemSetup.20_pythonSupport() {
     (python -c "import yaml; print(yaml.__version__)" &> /dev/null) && return 0
     pip install pyyaml==5.3.1 confluent_kafka==1.5.0
     python -c "import yaml; print(yaml.__version__)"
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.21_dockerAccess() {
+
+    systemSetup.run sudo usermod chmod a+rw /run/docker.sock
+    if [ $(grep -Ec '^docker.+bobb' /etc/group) -eq 0 ]; then
+        systemSetup.run sudo usermod --append --groups docker "${myUID}"
+    fi
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.22_rsyslog() {
+
+    if [ $(grep -c '^*.* @@10.3.1.15:514' /etc/rsyslog.conf) -eq 0 ]; then
+        if [ ! -f /mnt/ubuntu/rsyslog.client.conf ]; then
+            echo 'no template found'
+            return 0
+        fi
+        cp /mnt/ubuntu/rsyslog.client.conf /etc/rsyslog.conf
+        systemSetup.run sudo systemctl restart rsyslog
+    fi
 }
 
 #----------------------------------------------------------------------------

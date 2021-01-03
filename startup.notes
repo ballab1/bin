@@ -1,3 +1,5 @@
+TODO
+```
 
 apt-get update
 apt-get install -y apt-transport-https ca-certificates curl software-properties-common
@@ -12,5 +14,119 @@ sudo /home/bobb/.bin/systemSetup
 #   mysql
 # Jenkins: ## setting up the SCM-Configuration Plugin
 #this uses SSH, so an ssh key (~/.ssh/id_rsa.pub) has to be present. This has to be uploaded to GITHub for the account used to save the configuration
+
+
+Done
+=============================================================
+```
+12/20/2020
+===========
+    ELK
+	_udp, _syslog, _nginxaccess:
+	#	convert [nginx.time_local] to date
+	#	convert [syslog_timestamp1] to date
+		decode [nginx.core.request]
+		decode [nginx.core.http.http_user_agent]
+	_http
+		where is path:   headers.request_path
+	jenkins:
+#		raw log entries
+		convert [queueCauses] from json
+	#	decode [endTime]
+	#	decode [startTime]
+	#	decode [entryTime]
+	#	decode [exitTime]
+
+	where are msgs with jenkins: - - -  @cee:
+
+    systemSetup
+	Reading package lists... Done
+	apt-get install -y build-essential nfs-common nfs-kernel-server tasksel libxml2 libxml2-dev
+	apt-get install -y openjdk-8-jre-headless cifs-utils python
+	Extracting templates from packages: 100%
+	apt-get install -y librdkafka++1 librdkafka1 python-confluent-kafka
+	E: Unable to locate package python-confluent-kafka
+	***ERROR at .bin/systemSetup:376. '$@ > /dev/null' exited with status 100
+
+	INFO: updating containers to latest versions
+	docker-compose --file /home/bobb/kafka-deploy-s4/workspace.kafka-deploy-s4/docker-compose.yml pull
+	Pulling akhq         ... error
+	Pulling kafkamgr     ... error
+	Pulling kafkaeagle   ... error
+	Pulling zookeeper    ... error
+	Pulling broker       ... error
+	Pulling zoonavigator ... error
+
+	ERROR: for kafkamgr  Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
+	ERROR: for broker  Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
+	ERROR: for zookeeper  Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
+	ERROR: for zoonavigator  Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
+	ERROR: for akhq  Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
+	ERROR: for kafkaeagle  Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
+	Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
+	Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
+	Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
+	Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
+	Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
+	Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
+
+	add 'rsyslog.conf'
+
+	   usermod --append --groups docker "${myUID}"
+	    systemSetup.run systemctl daemon-reload
+	    systemSetup.run systemctl restart docker
+
+	.bin/systemSetup: line 95: myUID: unbound variable
+
+	need bobb:bobb  ->>  bobb:users
+
+	    echo 'install Git-LFS support'
+	#    systemSetup.run curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
+	    systemSetup.run apt-get install git-lfs
+
+	systemSetup.15_redirectOwnBashFiles
+	stat: cannot stat '/home/bobb/.bash_aliases': No such file or directory
+	stat: cannot stat '/usr/local/bin/git-crypt': No such file or directory
+	stat: cannot stat '/home/bobb/.tmux.conf': No such file or directory
+	Redirect own BASH files
+	ln -s /home/bobb/.bin/gitconfig /home/bobb/.gitconfig
+	ln -s /home/bobb/.bin/bashrc /home/bobb/.bashrc
+	ln -s /home/bobb/.bin/bash_aliases /home/bobb/.bash_aliases
+	ln -s /home/bobb/.bin/bash_logout /home/bobb/.bash_logout
+	ln -s /home/bobb/.bin/x86_64/git-crypt /usr/local/bin/git-crypt
+	ln -s /home/bobb/.bin/tmux.conf /home/bobb/.tmux.conf
+	chown: cannot dereference '/home/bobb/.tmux.conf': No such file or directory
+	***ERROR at .bin/systemSetup:199. 'chown "${myUID}:$myGID" "$link"' exited with status 1
+	bobb@s3:~$
+
+	$ systemSetup 16
+	systemSetup.16_unencryptRepos
+	~/.inf ~
+	/usr/local/bin/git-crypt: line 1: version: command not found
+	/usr/local/bin/git-crypt: line 2: oid: command not found
+	size: '197016': No such file
+	***ERROR at /home/bobb/.bin/systemSetup:221. 'git-crypt unlock "$CRYP_SECRET"' exited with status 1
+	bobb@s3 ~
+	$ git-crypt unlock ~/.crypt-key
+	/usr/local/bin/git-crypt: line 1: version: command not found
+	/usr/local/bin/git-crypt: line 2: oid: command not found
+	size: '197016': No such file
+	$ ls -l $(which git-crypt)
+	lrwxrwxrwx 1 root root 32 Oct 27 16:30 /usr/local/bin/git-crypt -> /home/bobb/.bin/x86_64/git-crypt
+	$ cat /home/bobb/.bin/x86_64/git-crypt
+	version https://git-lfs.github.com/spec/v1
+	oid sha256:97a11d036a9292a72ae21c007d78e1ecffc3b9efede5adf9d24dc6e08cc88ad6
+	size 197016
+
+
+	$ systemSetup 16
+	systemSetup.16_unencryptRepos
+	~/.inf ~
+	~
+	~/.work ~
+	~
+	~/.ssh ~
+	Error: Working directory not clean.
+	Please commit your changes or 'git stash' them before running 'git-crypt unlock'.
 
 
