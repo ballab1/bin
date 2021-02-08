@@ -490,7 +490,7 @@ set -o nounset
 set -o pipefail
 IFS=$'\n\t'
 
-declare -r DC_COMPOSE_VER=1.27.2
+declare -r DC_COMPOSE_VER=1.28.2
 declare -r CRYP_SECRET=~/.crypt-key
 declare -r USER_INFO_FILE=/tmp/userInfo
 declare -r PROGNAME="$(basename "${BASH_SOURCE[0]}")"
