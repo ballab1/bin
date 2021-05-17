@@ -3,4 +3,4 @@
 export PS4='+\011${BASH_SOURCE[0]}:\011${LINENO[0]}\011${FUNCNAME[0]:-}():\011'
 
 echo -e 'depth\tsource\tline #\tfunction\tstatement' > debug.log
-exec "$@" &>> debug.log
+exec bash -x "$@" &>> debug.log
