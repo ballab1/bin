@@ -27,7 +27,7 @@ declare status="$(docker ps -a --filter "id=$id" --format '{{.Status}}')"
 declare name=$(docker ps -a --format '{{.Names}}\t{{.ID}}'| grep "$id" | awk '{print $1}')
 echo "Saving container '${name}', so it can be debugged. This may take a minute" 
 docker commit "$id" x:tmp
-docker run -it --rm --volume "$PWD:/home/$USER" --entrypoint bash x:tmp
+docker run -it --rm --volume "$PWD:/home/$USER" --entrypoint sh x:tmp
 
 echo 'Removing temporary image used for debug'
 docker rmi x:tmp

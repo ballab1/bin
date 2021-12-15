@@ -1,6 +1,17 @@
 #!/bin/bash
 
-export PS4='+\011${BASH_SOURCE[0]}:\011${LINENO[0]}\011${FUNCNAME[0]:-}():\011'
+declare app="$1"
+shift
+declare args=( "$@" )
+
+declare alias="$(grep -E "^alias ${app}='" "$(dirname "${BASH_SOURCE[0]}")/bash_aliases" | cut -d '=' -f 2|cut -d "'" -f 2)"
+if [ "${alias:-}" ]; then
+    args=( ${alias} "${args[@]}" )
+    [ "${args[0]:0:1}" = '~' ] && args=( "${PWD}/${args[0]:1}" "${args[@]:1}" )
+else
+    args=( $app "${args[@]}" )
+fi
 
 echo -e 'depth\tsource\tline #\tfunction\tstatement' > debug.log
-exec bash -x "$@" &>> debug.log
+export PS4='+\011${BASH_SOURCE[0]}:\011${LINENO[0]}\011${FUNCNAME[0]:-}():\011'
+exec bash -x "${args[@]}" &>> debug.log
