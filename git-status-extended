@@ -1,6 +1,59 @@
 #!/bin/bash
 
 #----------------------------------------------------------------------------------------------
+function cmdLineArgs()
+{
+    # Parse command-line options into above variable
+    local -r longoptions='debug,overview,verbose'
+    local -r shortoptions='dov'
+    local -r options=$(getopt --longoptions "$longoptions" --options "$shortoptions" --name "$PROGNAME" -- "$@") || usage $?
+    eval set -- "$options"
+
+    local -A opts=()
+    [ ${DEBUG:-0} -ne 0 ] && opts['debug']=$DEBUG 
+    while [ "${1:-}" ]; do
+        case "${1,,}" in
+            -d|--d|--debug)       opts['debug']=1; shift;;
+            -o|--o|--overview)    opts['overview']=1; shift;;
+            -v|--v|--verbose)     opts['verbose']=1; shift;;
+            --)                   shift; break;;
+            *)                    break;;
+        esac
+    done
+
+    # show args
+    if [ ${opts['debug']:-0} -gt 0 ]; then
+        {
+            for i in "${!opts[@]}"; do
+               printf '%s: %s\n' $i "${opts[$i]}"
+            done
+            echo 'args:'
+            for i in "$@"; do
+               printf '   %s\n' "$i"
+            done
+            echo
+        } >&2
+    fi
+ 
+    local val
+    if [ ${#opts[*]} -gt 0 ]; then
+        local -i i=0
+        for val in "${!opts[@]}"; do
+            [ $(( i++ )) -gt 0 ] && echo -n ' '
+            printf '['\''%s'\'']='\''%s'\' "$val" "${opts[$val]}"
+        done
+        echo
+    else
+        echo "['dummy']=0"
+    fi
+    if [ $# -gt 0 ]; then
+        for val in "$@"; do
+            echo "$val"
+        done
+    fi 
+}
+
+#----------------------------------------------------------------------------------------------
 function gitBranch() {
     local branch=$(git rev-parse --abbrev-ref HEAD)
     if [ "$branch" = 'HEAD' ]; then
@@ -26,26 +79,26 @@ function gitReferenceBranch() {
     echo $ref
 }
 
-#---------------------------------------------------------------------------------------------- 
-function module_map() {
-    local -r gitmodules="${1:?}"
+#----------------------------------------------------------------------------------------------
+function main()
+{
+    # define our 'GLOBALS'
+    declare -a STATUS
+    declare -i VERBOSE=0
+    declare -A OPTS=()
 
-    local -i i=0
-    local line dir repo
-    while read -r line; do
-        case "$i" in
-            0) i=1
-               ;;
-            1) dir="${line#*= }"
-               i=2
-               ;; 
-            2) repo="${line#*= ../}"
-               repo="${repo%.git*}"
-               echo -e "['"${dir}"']='"${repo}"'"
-               i=0
-              ;;
-        esac
-    done < "$gitmodules"
+    # extract out options, and handle the common options
+    eval "OPTS=( $1 )"
+    readonly OPTS
+    shift
+    [ "${OPTS['verbose']:-}" ] && VERBOSE="${OPTS['verbose']}"
+
+
+    if [ "${OPTS['overview']:-}" ] && [ -e .gitmodules ]; then
+        showSubmoduleReport "$@"
+    fi
+
+    showBasicStatus "$@"
 }
 
 #---------------------------------------------------------------------------------------------- 
@@ -119,6 +172,28 @@ function modified_modules() {
 }
 
 #---------------------------------------------------------------------------------------------- 
+function module_map() {
+    local -r gitmodules="${1:?}"
+
+    local -i i=0
+    local line dir repo
+    while read -r line; do
+        case "$i" in
+            0) i=1
+               ;;
+            1) dir="${line#*= }"
+               i=2
+               ;; 
+            2) repo="${line#*= ../}"
+               repo="${repo%.git*}"
+               echo -e "['"${dir}"']='"${repo}"'"
+               i=0
+              ;;
+        esac
+    done < "$gitmodules"
+}
+
+#---------------------------------------------------------------------------------------------- 
 function showBasicStatus() {
 
     # save git config color settings
@@ -140,7 +215,18 @@ function showBasicStatus() {
 
 #---------------------------------------------------------------------------------------------- 
 function showSubmoduleReport() {
-    local json="${1:?}"
+
+    declare -A MODULE_NAMES
+    local -r reference="${1:-origin/$(gitReferenceBranch)}" 
+    #[ $(git rev-parse --verify --quiet "$reference" &> /dev/null ; echo $?) -eq 0 ] || exit 0
+
+    eval "MODULE_NAMES=( $(module_map .gitmodules) )"
+
+    local json="$(modified_modules "$reference")"
+    if [ "${OPTS['debug']:-0}" -ne 0 ]; then
+        echo "$json"
+        return 0
+    fi
 
     local ahead="$( jq -r '[.modules[].ahead]|add' <<< "$json" )"
     local behind="$( jq -r '[.modules[].behind]|add' <<< "$json" )"
@@ -202,92 +288,6 @@ function showSubmoduleReport() {
     echo
 
     [ $(jq '[.modules[].behind] | add' <<< "$json") -eq 0 ] || echo -e 'This module is not ready to create a PR'
-}
-
-#----------------------------------------------------------------------------------------------
-function cmdLineArgs()
-{
-    # Parse command-line options into above variable
-    local -r longoptions='debug,overview,verbose'
-    local -r shortoptions='dov'
-    local -r options=$(getopt --longoptions "$longoptions" --options "$shortoptions" --name "$PROGNAME" -- "$@") || usage $?
-    eval set -- "$options"
-
-    local -A opts=()
-    [ ${DEBUG:-0} -ne 0 ] && opts['debug']=$DEBUG 
-    while [ "${1:-}" ]; do
-        case "${1,,}" in
-            -d|--d|--debug)       opts['debug']=1; shift;;
-            -o|--o|--overview)    opts['overview']=1; shift;;
-            -v|--v|--verbose)     opts['verbose']=1; shift;;
-            --)                   shift; break;;
-            *)                    break;;
-        esac
-    done
-
-    # show args
-    if [ ${opts['debug']:-0} -gt 0 ]; then
-        {
-            for i in "${!opts[@]}"; do
-               printf '%s: %s\n' $i "${opts[$i]}"
-            done
-            echo 'args:'
-            for i in "$@"; do
-               printf '   %s\n' "$i"
-            done
-            echo
-        } >&2
-    fi
- 
-    local val
-    if [ ${#opts[*]} -gt 0 ]; then
-        local -i i=0
-        for val in "${!opts[@]}"; do
-            [ $(( i++ )) -gt 0 ] && echo -n ' '
-            printf '['\''%s'\'']='\''%s'\' "$val" "${opts[$val]}"
-        done
-        echo
-    else
-        echo "['dummy']=0"
-    fi
-    if [ $# -gt 0 ]; then
-        for val in "$@"; do
-            echo "$val"
-        done
-    fi 
-}
-
-#----------------------------------------------------------------------------------------------
-function main()
-{
-    # define our 'GLOBALS'
-    declare -a STATUS
-    declare -i VERBOSE=0
-    declare -A MODULE_NAMES
-    declare -A OPTS=()
-
-    # extract out options, and handle the common options
-    eval "OPTS=( $1 )"
-    readonly OPTS
-    shift
-    [ "${OPTS['verbose']:-}" ] && VERBOSE="${OPTS['verbose']}"
-
-
-    if [ "${OPTS['overview']:-}" ] && [ -e .gitmodules ]; then
-        local -r reference="${1:-origin/$(gitReferenceBranch)}" 
-        #[ $(git rev-parse --verify --quiet "$reference" &> /dev/null ; echo $?) -eq 0 ] || exit 0
-
-        eval "MODULE_NAMES=( $(module_map .gitmodules) )"
-
-        declare json="$(modified_modules "$reference")"
-        if [ "${OPTS['debug']:-0}" -eq 0 ]; then
-            showSubmoduleReport "$json"
-        else
-            echo "$json"
-        fi
-    fi
-
-    showBasicStatus
 }
 
 #----------------------------------------------------------------------------------------------
