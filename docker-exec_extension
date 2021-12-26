@@ -1,6 +1,10 @@
 #!/bin/bash
 
-declare container=$1
+declare container="${1:?}"
 shift
 
-docker exec -t "$container" "$container" "$@"
+declare cmd=''
+[ "$#" -eq 0 ] && cmd='bash'
+
+echo -e "\e[90mdocker exec -it $container $cmd $*\e[0m"
+docker exec -it "$container" $cmd "$@"
