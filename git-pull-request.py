@@ -1,1 +1,1 @@
-../.work/git-pull-request.py
+utilities/git-pull-request.py
