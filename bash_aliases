@@ -26,7 +26,7 @@ alias gs='git status-extended'
 
 
 alias env='/usr/bin/env | sort'
-alias rcc='docker-utilities remoteLocal'
+#alias rcc='docker-utilities remoteLocal'
 
 
 alias rlg='dockerRunLogs'
