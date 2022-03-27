@@ -60,7 +60,7 @@ function systemSetup.04_getLatestDockerCompose() {
     echo "get docker-compose $DC_COMPOSE_VER"
     systemSetup.run systemSetup.saveDefaultDockerCompose || return 0; 
     echo 'Downloading latest docker-compose'
-    systemSetup.run curl -L "https://github.com/docker/compose/releases/download/${DC_COMPOSE_VER}/docker-compose-$(uname -s)-$(uname -m)" -o "$target"
+    systemSetup.run curl -L "https://github.com/docker/compose/releases/download/v${DC_COMPOSE_VER}/docker-compose-$(uname -s)-$(uname -m)" -o "$target"
     chmod 755 "$target"
     systemSetup.run ln -s "$target" /usr/bin/docker-compose
 }
@@ -496,7 +496,7 @@ set -o nounset
 set -o pipefail
 IFS=$'\n\t'
 
-declare -r DC_COMPOSE_VER=v2.2.3
+declare -r DC_COMPOSE_VER=2.3.4
 declare -r CRYP_SECRET=~/.crypt-key
 declare -r USER_INFO_FILE=/tmp/userInfo
 declare -r PROGNAME="$(basename "${BASH_SOURCE[0]}")"
