@@ -1,12 +1,14 @@
 #!/bin/bash
 
-if [ $# -eq 0 ]; then
+KCAT_VERSION=1.7.1
+
+if false || [ $# -eq 0 ] || [ "$1" = '--help' ] || [ "$1" = '-h' ]; then
   cat << EOF
-Usage: kafkacat <options> [file1 file2 .. | topic1 topic2 ..]]
-kafkacat - Apache Kafka producer and consumer tool
-https://github.com/edenhill/kafkacat
-Copyright (c) 2014-2019, Magnus Edenhill
-Version 1.6.0-PRE (JSON, Avro, Transactions, librdkafka 1.4.2 builtin.features=gzip,snappy,ssl,sasl,regex,lz4,sasl_gssapi,sasl_plain,sasl_scram,plugins,zstd,sasl_oauthbearer)
+Usage: kcat <options> [file1 file2 .. | topic1 topic2 ..]]
+kcat - Apache Kafka producer and consumer tool
+https://github.com/edenhill/kcat
+Copyright (c) 2014-2021, Magnus Edenhill
+Version $KCAT_VERSION (JSON, Avro, Transactions, IncrementalAssign, JSONVerbatim, librdkafka 1.8.2 builtin.features=gzip,snappy,ssl,sasl,regex,lz4,sasl_plain,sasl_scram,plugins,zstd,sasl_oauthbearer)
 
 
 General options:
@@ -16,14 +18,13 @@ General options:
   -t <topic>         Topic to consume from, produce to, or list
   -p <partition>     Partition
   -b <brokers,..>    Bootstrap broker(s) (host[:port])
-  -D <delim>         Message delimiter character:
-                     a-z.. | \r | \n | \t | \xNN
+  -D <delim>         Message delimiter string:
+                     a-z | \r | \n | \t | \xNN ..
                      Default: \n
-  -E                 Do not exit on non fatal error
   -K <delim>         Key delimiter (same format as -D)
   -c <cnt>           Limit message count
   -m <seconds>       Metadata (et.al.) request timeout.
-                     This limits how long kafkacat will block
+                     This limits how long kcat will block
                      while waiting for initial metadata to be
                      retrieved from the Kafka cluster.
                      It also sets the timeout for the producer's
@@ -31,8 +32,8 @@ General options:
                      Default: 5 seconds.
   -F <config-file>   Read configuration properties from file,
                      file format is "property=value".
-                     The KAFKACAT_CONFIG=path environment can also be used, but -F takes preceedence.
-                     The default configuration file is $HOME/.config/kafkacat.conf
+                     The KCAT_CONFIG=path environment can also be used, but -F takes precedence.
+                     The default configuration file is $HOME/.config/kcat.conf
   -X list            List available librdkafka configuration properties
   -X prop=val        Set librdkafka configuration property.
                      Properties prefixed with "topic." are
@@ -40,12 +41,12 @@ General options:
   -X schema.registry.prop=val Set libserdes configuration property for the Avro/Schema-Registry client.
   -X dump            Dump configuration and exit.
   -d <dbg1,...>      Enable librdkafka debugging:
-                     all,generic,broker,topic,metadata,feature,queue,msg,protocol,cgrp,security,fetch,interceptor,plugin,consumer,admin,eos,mock
+                     all,generic,broker,topic,metadata,feature,queue,msg,protocol,cgrp,security,fetch,interceptor,plugin,consumer,admin,eos,mock,assignor,conf
   -q                 Be quiet (verbosity set to 0)
   -v                 Increase verbosity
+  -E                 Do not exit on non-fatal error
   -V                 Print version
   -h                 Print usage help
-
 
 Producer options:
   -z snappy|gzip|lz4 Message compression. Default: none
@@ -70,7 +71,7 @@ Producer options:
                      messages in a single transaction which
                      is committed when stdin is closed or the
                      input file(s) are fully read.
-                     If kafkacat is terminated through Ctrl-C
+                     If kcat is terminated through Ctrl-C
                      (et.al) the transaction will be aborted.
 
 Consumer options:
@@ -108,7 +109,7 @@ Consumer options:
                        avro       - Avro-formatted with schema in Schema-Registry (requires -r)
                      E.g.: -s key=i -s value=avro - key is 32-bit integer, value is Avro.
                        or: -s avro - both key and value are Avro-serialized
-  -r <url>           Schema registry URL (requires avro deserializer to be used with -s)
+  -r <url>           Schema registry URL (when avro deserializer is used with -s)
   -D <delim>         Delimiter to separate messages on output
   -K <delim>         Print message keys prefixing the message
                      with specified delimiter.
@@ -150,29 +151,34 @@ Format string tokens:
 JSON message envelope (on one line) when consuming with -J:
  { "topic": str, "partition": int, "offset": int,
    "tstype": "create|logappend|unknown", "ts": int, // timestamp in milliseconds since epoch
+   "broker": int,
    "headers": { "<name>": str, .. }, // optional
    "key": str|json, "payload": str|json,
-   "key_error": str, "payload_error": str } //optional
- (note: key_error and payload_error are only included if deserialization failed)
+   "key_error": str, "payload_error": str, //optional
+   "key_schema_id": int, "value_schema_id": int //optional
+ }
+ notes:
+   - key_error and payload_error are only included if deserialization fails.
+   - key_schema_id and value_schema_id are included for successfully deserialized Avro messages.
 
 Consumer mode (writes messages to stdout):
-  kafkacat -b <broker> -t <topic> -p <partition>
+  kcat -b <broker> -t <topic> -p <partition>
  or:
-  kafkacat -C -b ...
+  kcat -C -b ...
 
 High-level KafkaConsumer mode:
-  kafkacat -b <broker> -G <group-id> topic1 top2 ^aregex\d+
+  kcat -b <broker> -G <group-id> topic1 top2 ^aregex\d+
 
 Producer mode (reads messages from stdin):
-  ... | kafkacat -b <broker> -t <topic> -p <partition>
+  ... | kcat -b <broker> -t <topic> -p <partition>
  or:
-  kafkacat -P -b ...
+  kcat -P -b ...
 
 Metadata listing:
-  kafkacat -L -b <broker> [-t <topic>]
+  kcat -L -b <broker> [-t <topic>]
 
 Query offset by timestamp:
-  kafkacat -Q -b broker -t <topic>:<partition>:<timestamp>
+  kcat -Q -b broker -t <topic>:<partition>:<timestamp>
 
 EOF
 exit 1
@@ -180,5 +186,4 @@ fi
 declare option=$1
 shift
 
-#docker run ${DOCKER_REGISTRY:-s2.ubuntu.home:5000/}thirdparty/kafkacat:latest kafkacat -L -b $KAFKA_BOOTSTRAP_SERVERS
-docker run ${DOCKER_REGISTRY:-s2.ubuntu.home:5000/}thirdparty/kafkacat:latest kafkacat $option -b $KAFKA_BOOTSTRAP_SERVERS "$@"
+docker run --rm "${DOCKER_REGISTRY:-s2.ubuntu.home:5000/}thirdparty/kcat:$KCAT_VERSION" kafkacat $option -b $KAFKA_BOOTSTRAP_SERVERS "$@" 
