@@ -72,15 +72,15 @@ function systemSetup.05_setupRegistryAccess() {
     mkdir -p "$(dirname "$daemonFile")" ||:
     if [ ! -f "$daemonFile" ]; then
         echo "Updating $daemonFile"
-        echo '{ "insecure-registries":["s2.ubuntu.home:5000","ubuntu-s2.home:5000","10.3.1.12:5000"] }' > "${daemonFile}.tmp"
+        echo '{ "insecure-registries":["s2.ubuntu.home:5000","ubuntu-s2.home:5000","10.3.1.9:5000"] }' > "${daemonFile}.tmp"
 
     elif [ "$(jq 'has("insecure-registries")')" != 'true' ]; then
         echo "Updating $daemonFile"
-        jq '. + { "insecure-registries":["s2.ubuntu.home:5000","ubuntu-s2.home:5000","10.3.1.12:5000"] }' "$daemonFile" > "${daemonFile}.tmp"
+        jq '. + { "insecure-registries":["s2.ubuntu.home:5000","ubuntu-s2.home:5000","10.3.1.9:5000"] }' "$daemonFile" > "${daemonFile}.tmp"
 
-    elif [ "$(jq '."insecure-registries"[]|contains( "\"s2.ubuntu.home:5000\",\"ubuntu-s2.home:5000\",\"10.3.1.12:5000\"" )' "$daemonFile")" != 'true' ]; then
+    elif [ "$(jq '."insecure-registries"[]|contains( "\"s2.ubuntu.home:5000\",\"ubuntu-s2.home:5000\",\"10.3.1.9:5000\"" )' "$daemonFile")" != 'true' ]; then
         echo "Updating $daemonFile"
-        jq 'map_values(. +  ["s2.ubuntu.home:5000","ubuntu-s2.home:5000","10.3.1.12:5000"] )' "$daemonFile" > "${daemonFile}.tmp"
+        jq 'map_values(. +  ["s2.ubuntu.home:5000","ubuntu-s2.home:5000","10.3.1.9:5000"] )' "$daemonFile" > "${daemonFile}.tmp"
 
     else
         return 0
