@@ -19,6 +19,23 @@ function systemSetup.ALL() {
 }
 
 #----------------------------------------------------------------------------
+function systemSetup.00_init() {
+
+    cd /home/bobb
+    mkdir -p .org
+    mkdir -p .local
+    git clone --recursive https://github.com/ballab1/bin .bin
+
+    [ -e .bash_aliases ] && mv .bash_aliases .org/
+    [ -e .bash_logout ] && mv .bash_logout .org/
+    [ -e .bashrc ] && mv .bashrc .org/
+    ln -s .bin/bash_aliases .bash_aliases
+    ln -s .bin/bashrc .bashrc
+    ln -s .bin/bashrc .bashrc
+    ln -s .bin/gitconfig .gitconfig
+}
+
+#----------------------------------------------------------------------------
 function systemSetup.01_addSudoers() {
     local target=/etc/sudoers.d/myOverrides
     [ -f "$target" ] && return 0 
@@ -219,7 +236,7 @@ function systemSetup.15_redirectOwnBashFiles() {
 
 #----------------------------------------------------------------------------
 function systemSetup.16_unencryptRepos() {
-    if [ -z "$(which git-crypt)" ]]; then
+    if [ -z "$(which git-crypt)" ]; then
         if [ ! -e "${myHOME}/.bin/$(uname -m)/git-crypt" ]; then
             echo 'need "git-crpyt" installed before running'
             return 0
@@ -336,20 +353,20 @@ EOF
 #----------------------------------------------------------------------------
 function systemSetup.20_pythonSupport() {
 
-    [ "$(which pip)" ] && (python -c "import yaml; print(yaml.__version__)" &> /dev/null) && return 0
+    [ "$(which pip)" ] && (python3 -c "import yaml; print(yaml.__version__)" &> /dev/null) && return 0
 
 
     echo 'Setting up YAML support via python'
     if [ -z "$(which pip)" ]; then
         curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-        python get-pip.py
+        python3 get-pip.py
         rm get-pip.py
     fi
 
 
-    (python -c "import yaml; print(yaml.__version__)" &> /dev/null) && return 0
+    (python3 -c "import yaml; print(yaml.__version__)" &> /dev/null) && return 0
     pip install pyyaml==5.3.1 confluent_kafka==1.5.0
-    python -c "import yaml; print(yaml.__version__)"
+    python3 -c "import yaml; print(yaml.__version__)"
 }
 
 #----------------------------------------------------------------------------
@@ -375,29 +392,9 @@ function systemSetup.22_rsyslog() {
 }
 
 #----------------------------------------------------------------------------
-function systemSetup.doFunction() {
-    
-    local -a functions
-    mapfile -t functions < <(systemSetup.functions ||:)
+function systemSetup.23_nodeExplorer() {
 
-    local arg
-    local -a results
-
-    # verify args
-    for arg in "$@"; do
-        mapfile -t results < <(printf '%s\n' "${functions[@]}" | grep "$arg" ||:)
-        if [ ${#results[*]} -ne 1 ]; then
-             echo 'Invalid arguments'
-             return 0
-        fi
-    done
-
-    # run args
-    for arg in "$@"; do
-        mapfile -t results < <(printf '%s\n' "${functions[@]}" | grep "$arg" ||:)
-        echo "systemSetup.${results[0]//. /_}"
-        systemSetup.${results[0]//. /_}
-    done
+    "${PROGRAM_DIR}/install.nodeExplorer"
 }
 
 #----------------------------------------------------------------------------

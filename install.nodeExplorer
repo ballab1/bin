@@ -181,11 +181,7 @@ function install.node_exporter() {
     [ -f /etc/node_exporter.opts ] || setup.textfile_collector '/var/lib/node_exporter/textfile_collector'
 
 #    case $(source /etc/os-release;echo "$ID_LIKE") in
-    case 'debian2' in
-       debian2)  init_d > /etc/init.d/node_exporter
-                 chmod 755 /etc/init.d/node_exporter
-                 ln -s /etc/init.d/node_exporter /etc/rc5.d/S30node_exporter
-                 ;;
+    case 'debian' in
        2)  openbsd > /tmp/rc.d
            ;;
        3)  openwrt > /tmp/init.d
@@ -195,6 +191,10 @@ function install.node_exporter() {
                 systemctl start node_exporter
                 systemctl status node_exporter
                ;;
+       debian2)  init_d > /etc/init.d/node_exporter
+                 chmod 755 /etc/init.d/node_exporter
+                 ln -s /etc/init.d/node_exporter /etc/rc5.d/S30node_exporter
+                 ;;
     esac
 }
 
