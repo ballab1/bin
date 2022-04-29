@@ -121,10 +121,10 @@ function systemSetup.06_exposeDockerRestAPI() {
 #----------------------------------------------------------------------------
 function systemSetup.09_USER() {
     if [[ ${myUID:-} || ${myGID:-} ]]; then
-        echo 'looks like user alread setup'
+        echo 'looks like user already setup'
         return 0
     fi
-    systemSetup.run userADD --create-home --gid users --GROUPS docker jenkins www --shell bash bobb
+    systemSetup.run userADD --create-home --gid users --GROUPS docker jenkins www --shell bash -uid 1026 bobb
 }
 
 #----------------------------------------------------------------------------
@@ -398,6 +398,32 @@ function systemSetup.23_nodeExplorer() {
 }
 
 #----------------------------------------------------------------------------
+function systemSetup.doFunction() {
+    
+    local -a functions
+    mapfile -t functions < <(systemSetup.functions ||:)
+
+    local arg
+    local -a results
+
+    # verify args
+    for arg in "$@"; do
+        mapfile -t results < <(printf '%s\n' "${functions[@]}" | grep "$arg" ||:)
+        if [ ${#results[*]} -ne 1 ]; then
+             echo 'Invalid arguments'
+             return 0
+        fi
+    done
+
+    # run args
+    for arg in "$@"; do
+        mapfile -t results < <(printf '%s\n' "${functions[@]}" | grep "$arg" ||:)
+        echo "systemSetup.${results[0]//. /_}"
+        systemSetup.${results[0]//. /_}
+    done
+}
+
+#----------------------------------------------------------------------------
 function systemSetup.functions() {
     # list all user functions
     grep -E '^function' "${PROGRAM_DIR}/$PROGNAME" \
@@ -455,6 +481,16 @@ function systemSetup.usage() {
 }
 
 #----------------------------------------------------------------------------
+function systemSetup.checkUser()
+{
+    local uid="$(getent passwd bobb)"
+    [ -z "${uid:-}" ] && return 0
+    [ "$(cut -d ':' -f 1)" = 1026 ] && return 0
+    echo 'invalid UID. Change UID to 1026 for nas compatibility'
+    exit 1
+}
+
+#----------------------------------------------------------------------------
 function systemSetup.userInfo()
 {
     echo "myNAME='${1//:}'"
@@ -503,6 +539,7 @@ if [ $# -eq 0 ] || [[ "${1,,}" = *help ]] || [[ "${1,,}" = *usage ]]; then
     systemSetup.usage
     exit
 fi
+systemSetup.checkUser
 
 # always run as root
 if [ ${EUID:-0} -ne 0 ]; then
