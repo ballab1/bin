@@ -31,7 +31,6 @@ alias env='/usr/bin/env | sort'
 
 alias rlg='dockerRunLogs'
 alias tmux='/usr/bin/tmux -f ~/.tmux/tmux.conf'
-alias dockviz='docker run -it --rm -v /var/run/docker.sock:/var/run/docker.sock nate/dockviz'
 alias kc='microk8s.kubectl'
 alias kubectl='microk8s.kubectl'
 

@@ -6,20 +6,21 @@
 function minio.install()
 {
     # download and install the binary 
-    useradd --system minio-user --shell /sbin/nologin
+    groupadd --gid 990 minio-user
+    useradd --system minio-user --uid 990 --gid 990 --shell /sbin/nologin
     curl -O https://dl.minio.io/server/minio/release/linux-amd64/minio
+    chmod +x minio
+    chown minio-user:minio-user minio
     mv minio /usr/local/bin
-    chmod +x /usr/local/bin/minio
-    chown minio-user:minio-user /usr/local/bin/minio
 
     #  ensure minios starts with system reboot
-    mkdir /usr/local/share/minio
-    mkdir /etc/minio
+    mkdir -p /usr/local/share/minio
     chown minio-user:minio-user /usr/local/share/minio
+    mkdir -p /etc/minio
     chown minio-user:minio-user /etc/minio
 
     # create /etc/default/minio for options
-    cat < EOF > /etc/default/minio
+    cat << EOF > /etc/default/minio
 MINIO_VOLUMES="/usr/local/share/minio/"
 MINIO_OPTS="-C /etc/minio --address s3-minio.home:443"
 EOF
@@ -33,10 +34,12 @@ EOF
     # implement the TLS certificates with certbot
     apt update
     apt install -y software-properties-common
-    add-apt-repository ppa:certbot/certbot
-    apt update
-    apt install -y certbot
-    certbot certonly --standalone -d ts3-minio.home --staple-ocsp -m tu@correoelectronico.com --agree-tos
+
+    # setup certbot
+    snap install --classic certbot
+    ln -s /snap/bin/certbot /usr/bin/certbot
+
+    certbot certonly --standalone -d s3-minio.home --staple-ocsp -m bballantyne@yahoo.com --agree-tos
     cp /etc/letsencrypt/live/minio.ranvirslog.com/fullchain.pem /etc/minio/certs/public.crt
     cp /etc/letsencrypt/live/minio.ranvirslog.com/privkey.pem /etc/minio/certs/private.key
     chown minio-user:minio-user /etc/minio/certs/public.crt
