@@ -55,6 +55,7 @@ function systemSetup.02_requiredPackages() {
     systemSetup.run apt-get install -y openjdk-8-jre-headless cifs-utils docker-compose jq
     systemSetup.run apt-get install -y python3 python-pip
     systemSetup.run apt-get install -y librdkafka++1 librdkafka1 python3-confluent-kafka
+    systemSetup.run apt-get install -y apt install net-tools
 }
 
 #----------------------------------------------------------------------------
@@ -529,7 +530,7 @@ set -o nounset
 set -o pipefail
 IFS=$'\n\t'
 
-declare -r DC_COMPOSE_VER=2.4.1
+declare -r DC_COMPOSE_VER=2.5.0
 declare -r CRYP_SECRET=~/.crypt-key
 declare -r USER_INFO_FILE=/tmp/userInfo
 declare -r PROGNAME="$(basename "${BASH_SOURCE[0]}")"
