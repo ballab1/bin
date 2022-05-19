@@ -33,4 +33,3 @@ alias rlg='dockerRunLogs'
 alias tmux='/usr/bin/tmux -f ~/.tmux/tmux.conf'
 alias kc='microk8s.kubectl'
 alias kubectl='microk8s.kubectl'
-

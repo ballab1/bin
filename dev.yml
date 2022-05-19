@@ -11,12 +11,14 @@ services:
             BUILD_PUSH: "${BUILD_PUSH:-}"
             CRYPT_FILE: /run/secrets/.crypt-key
         extra_hosts:
-            - "ubuntu-s1:10.3.1.11"
-            - "s2.ubuntu.home:10.3.1.12"
-            - "ubuntu-s3:10.3.1.6"
-            - "ubuntu-s4:10.3.1.10" 
-            - "ubuntu-s5:10.3.1.14" 
-            - "ubuntu-s5:10.3.1.15" 
+            - "s1.ubuntu.home:10.3.1.8"
+            - "s2.ubuntu.home:10.3.1.9"
+            - "s3.ubuntu.home:10.3.1.10"
+            - "s4.ubuntu.home:10.3.1.11"
+            - "s5.ubuntu.home:10.3.1.12"
+            - "s6.ubuntu.home:10.3.1.13"
+            - "s7.ubuntu.home:10.3.1.14"
+            - "s8.ubuntu.home:10.3.1.15"
         hostname: dev
         image: ${DOCKER_REGISTRY:-s2.ubuntu.home:5000/}${CONTAINER_OS:-alpine}/build_container:${CONTAINER_TAG:-latest}
         logging:
