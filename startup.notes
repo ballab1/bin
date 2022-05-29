@@ -1,13 +1,27 @@
 TODO
 ```
 
+USER=bob_tmp
+adduser --no-create-home --ingroup users --shell /bin/bash "$USER"
+cat > /etc/sudoers.d/myOverrides << EOF
+$USER      ALL=(ALL:ALL) NOPASSWD:  ALL
+EOF
+
+# as root from "$USER"
+ps faux | grep '^bobb'
+usermod -g users --uid 1026 bobb
+chown -R root:root /home
+
+# as root from bobb
+userdel "$USER"
+rm /etc/sudoers.d/myOverrides
+
 apt-get update
 apt-get install -y apt-transport-https ca-certificates curl software-properties-common
-git clone https://github.com/ballab1/bin.git --recurse-submodules /home/bobb/.bin
-chown -R bobb:bobb /home/bobb/.bin
 ensure jenkins agent has been disconnected
 
-sudo /home/bobb/.bin/systemSetup
+/home/bobb/.bin/systemSetup 00
+/home/bobb/.bin/systemSetup 01
 
 # update
 #   timescaledb
@@ -16,28 +30,13 @@ sudo /home/bobb/.bin/systemSetup
 #this uses SSH, so an ssh key (~/.ssh/id_rsa.pub) has to be present. This has to be uploaded to GITHub for the account used to save the configuration
 
 
+
+
 Done
 =============================================================
 ```
 12/20/2020
 ===========
-    ELK
-	_udp, _syslog, _nginxaccess:
-	#	convert [nginx.time_local] to date
-	#	convert [syslog_timestamp1] to date
-		decode [nginx.core.request]
-		decode [nginx.core.http.http_user_agent]
-	_http
-		where is path:   headers.request_path
-	jenkins:
-#		raw log entries
-		convert [queueCauses] from json
-	#	decode [endTime]
-	#	decode [startTime]
-	#	decode [entryTime]
-	#	decode [exitTime]
-
-	where are msgs with jenkins: - - -  @cee:
 
     systemSetup
 	Reading package lists... Done

@@ -2,9 +2,7 @@
 
 # need to include changes to
 #    /etc/dhcp/dhclient.conf
-#    /etc/netplan/00-installer-config.yaml
-#    /etc/netplan/50-cloud-init.yaml
-#    /etc/fstab
+
 
 #----------------------------------------------------------------------------
 function systemSetup.ALL() {
@@ -23,7 +21,6 @@ function systemSetup.00_init() {
 
     cd /home/bobb
     mkdir -p .org
-    mkdir -p .local
     git clone --recursive https://github.com/ballab1/bin .bin
 
     [ -e .bash_aliases ] && mv .bash_aliases .org/
@@ -33,6 +30,9 @@ function systemSetup.00_init() {
     ln -s .bin/bashrc .bashrc
     ln -s .bin/bashrc .bashrc
     ln -s .bin/gitconfig .gitconfig
+
+    local host="$(hostname -f)"
+    [ "${host%.*}" != "$host" ] || hostctl set-hostname "${host%%.*}.ubuntu.home"
 }
 
 #----------------------------------------------------------------------------
@@ -48,58 +48,123 @@ EOF
 
 #----------------------------------------------------------------------------
 function systemSetup.02_requiredPackages() {
+
+    apt-get update
+    systemSetup.run apt install -y curl
+
     echo 'Setting up required packages'
+    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+
     add-apt-repository universe
     apt-get update
-    systemSetup.run apt-get install -y build-essential nfs-common nfs-kernel-server tasksel libxml2 libxml2-dev
-    systemSetup.run apt-get install -y openjdk-8-jre-headless cifs-utils docker-compose jq
-    systemSetup.run apt-get install -y python3 python-pip
-    systemSetup.run apt-get install -y librdkafka++1 librdkafka1 python3-confluent-kafka
-    systemSetup.run apt-get install -y apt install net-tools
+    systemSetup.run apt install -y build-essential nfs-common nfs-kernel-server tasksel libxml2 libxml2-dev
+    systemSetup.run apt install -y openjdk-8-jre-headless cifs-utils docker-compose jq gh
+    systemSetup.run apt install -y python3 python3-pip
+    systemSetup.run apt install -y libssl-dev ibrdkafka++1 librdkafka1 python3-confluent-kafka
+    systemSetup.run apt install -y net-tools
 }
 
 #----------------------------------------------------------------------------
-function systemSetup.03_installWebAdmin() {
-    [ "$(grep -sc 'webmin.com' /etc/apt/sources.list)" -ne 0 ] && return 0
+function systemSetup.03_updateNetworkConfig() {
 
-    echo 'webadmin no longer installed'
-#    echo 'Installing webadmin'
-#    wget -qO- http://www.webmin.com/jcameron-key.asc | sudo apt-key add
-#    add-apt-repository "deb http://download.webmin.com/download/repository sarge contrib"
-#    systemSetup.run apt update
-#    systemSetup.run apt install -y webmin
+    # get our local interface name
+    local iface="$(ip -4 -j address show scope global dynamic|jq -r '.[0].addr_info[].label')"  
+    local netCfg=$(grep -r "${iface}:" /etc/netplan/ | cut -d ':' -f 1)
+    
+    cat << EOF > "$netCfg"
+# This is the network config written by 'subiquity'
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    ${iface}:
+      dhcp4: true
+      dhcp4-overrides:
+        use-dns: false
+      dhcp6: true
+      dhcp6-overrides:
+        use-dns: false
+      nameservers:
+        search: [ ubuntu.home, home ]
+        addresses:
+          - 10.3.1.4
+          - '2601:189:4000:1126:211:32ff:feb5:932e'
+          - 8.8.8.8
+          - '2001:4860:4860::8888'
+          - 8.8.4.4
+          - '2001:4860:4860::8844'
+EOF
+    systemSetup.run netplan apply
 }
 
 #----------------------------------------------------------------------------
-function systemSetup.04_getLatestDockerCompose() {
+function systemSetup.04_networkMounts() {
+
+    local target=/etc/fstab
+    local -A mounts=( ['/mnt/ubuntu']='10.3.1.4:/volume1/ubuntu'
+                      ['/mnt/GIT']='10.3.1.4:/volume1/GIT'
+                      ['/mnt/k8s']='10.3.1.4:/volume1/K8S'
+                      ['/home/bobb/src']='10.3.1.4:/volume1/ubuntu'
+                      ['/home/bobb/GIT']='10.3.1.4:/volume1/GIT'
+#                      ['/mnt/homes']='10.3.1.4:/volume1/homes'
+                    )
+
+    touch "$target"
+    for mnt in "${!mounts[@]}";do
+        mkdir -p "$mnt"
+        sed -i "/${mnt//\//\\/} /d" "$target"
+        printf '%s %s nfs rw,vers=4\n' "${mounts[$mnt]}" "${mnt}" >> "$target"
+    done
+    mount -a ||:
+
+    [ -d /home/bobb/GIT/git-crypt ] || return 0
+    cd /home/bobb/GIT/git-crypt
+    make install
+    cd /home/bobb/.bin/utilities
+    git-crypt unlock /home/bobb/src/keys/work-stuff.key
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.05_getLatestApps() {
+
     [ "$(uname -m)" = 'x86_64' ] || return 0
-    local target="/usr/local/bin/docker-compose.$DC_COMPOSE_VER"
-    [ -f "$target" ] && return 0 
 
-    echo "get docker-compose $DC_COMPOSE_VER"
-    systemSetup.run systemSetup.saveDefaultDockerCompose || return 0; 
-    echo 'Downloading latest docker-compose'
-    systemSetup.run curl -L "https://github.com/docker/compose/releases/download/v${DC_COMPOSE_VER}/docker-compose-$(uname -s)-$(uname -m)" -o "$target"
-    chmod 755 "$target"
-    systemSetup.run ln -s "$target" /usr/bin/docker-compose
+    local -A DOCKER_COMPOSE_VER=( ['file']="/usr/local/bin/docker-compose.$DOCKER_COMPOSE_VER"
+                                  ['target']='/usr/bin/docker-compose'
+                                  ['url']="https://github.com/docker/compose/releases/download/v${DOCKER_COMPOSE_VER}/docker-compose-$(uname -s)-$(uname -m)"
+                                  ['version']="$DOCKER_COMPOSE_VER"
+                                )
+    local -A GIT_CRYPT_VER=( ['file']="/usr/local/bin/git-crypt.$GIT_CRYPT_VER"
+                             ['target']='/usr/bin/git-crypt'
+                             ['url']="https://github.com/docker/compose/releases/download/v${DOCKER_COMPOSE_VER}/docker-compose-$(uname -s)-$(uname -m)"
+                             ['version']="$GIT_CRYPT_VER"
+                           )
+
+
+    local targets=( "DOCKER_COMPOSE_VER")
+
+    for target in "${targets[@]}";do
+        eval systemSetup.updateApp "\${$target['file']}" "\${$target['target']}" "\${$target['version']}" "\${$target['url']}"
+    done
 }
 
 #----------------------------------------------------------------------------
-function systemSetup.05_setupRegistryAccess() {
-    local daemonFile='/etc/docker/daemon.json'
+function systemSetup.07_setupRegistryAccess() {
 
+    local daemonFile='/etc/docker/daemon.json'
     mkdir -p "$(dirname "$daemonFile")" ||:
     if [ ! -f "$daemonFile" ]; then
         echo "Updating $daemonFile"
         echo '{ "insecure-registries":["s2.ubuntu.home:5000","ubuntu-s2.home:5000","10.3.1.9:5000"] }' > "${daemonFile}.tmp"
 
-    elif [ "$(jq 'has("insecure-registries")')" != 'true' ]; then
+    elif [ "$(jq 'has("insecure-registries")' "$daemonFile")" != 'true' ]; then
         echo "Updating $daemonFile"
         jq '. + { "insecure-registries":["s2.ubuntu.home:5000","ubuntu-s2.home:5000","10.3.1.9:5000"] }' "$daemonFile" > "${daemonFile}.tmp"
 
     elif [ "$(jq '."insecure-registries"[]|contains( "\"s2.ubuntu.home:5000\",\"ubuntu-s2.home:5000\",\"10.3.1.9:5000\"" )' "$daemonFile")" != 'true' ]; then
         echo "Updating $daemonFile"
-        jq 'map_values(. +  ["s2.ubuntu.home:5000","ubuntu-s2.home:5000","10.3.1.9:5000"] )' "$daemonFile" > "${daemonFile}.tmp"
+        jq '."insecure-registries"=(."insecure-registries"+["s2.ubuntu.home:5000","ubuntu-s2.home:5000","10.3.1.9:5000"]|unique)' "$daemonFile" > "${daemonFile}.tmp"
 
     else
         return 0
@@ -109,19 +174,7 @@ function systemSetup.05_setupRegistryAccess() {
 }
 
 #----------------------------------------------------------------------------
-function systemSetup.06_exposeDockerRestAPI() {
-    local target=/lib/systemd/system/docker.service
-    [ "$(grep -sc 'tcp://0.0.0.0:4243' "$target")" -gt 0 ] && return 0 
-
-    echo 'Exposing docker REST API'
-    echo -e '\e[93msed -iE '"'"'s|^(ExecStart=/usr/bin/dockerd -H fd://)(.*)$|\1 -H tcp://0.0.0.0:4243\2|'"' $target"'\e[0m'
-    sed -i -E 's|^(ExecStart=/usr/bin/dockerd -H fd://)(.*)$|\1 -H tcp://0.0.0.0:4243\2|' "$target"
-    systemSetup.run systemctl daemon-reload
-    systemSetup.run systemctl restart docker
-}
-
-#----------------------------------------------------------------------------
-function systemSetup.09_USER() {
+function systemSetup.08_USER() {
     if [[ ${myUID:-} || ${myGID:-} ]]; then
         echo 'looks like user already setup'
         return 0
@@ -138,7 +191,7 @@ function systemSetup.11_installGitLFS() {
     git lfs version &> /dev/null && return 0 
 
     echo 'install Git-LFS support'
-    systemSetup.run curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
+    curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
     systemSetup.run apt-get install git-lfs
     cd "${myHOME}/.bin"
     systemSetup.run git lfs install
@@ -159,23 +212,9 @@ function systemSetup.12_jenkinsSlaveFolders() {
 }
 
 #----------------------------------------------------------------------------
-function systemSetup.13_updatePerlSupport() {
-    false || return 0    # skip this
-    if [[ -z ${myUID:-} || -z ${myGID:-} || -z ${myHOME:-} ]]; then
-        echo 'need to run this from non-user'
-        return 0
-    fi
-
-    [ -d "${myHOME}/.cpan" ] && return 0
-    echo 'Adding needed PERL modules'
-    systemSetup.run "cpan -i XML::LibXML <<< $(echo 'yes')"
-    chown "${myUID}:$myGID" -R "${myHOME}/.cpan"
-}
-
-#----------------------------------------------------------------------------
 function systemSetup.14_getGitRepos() {
+
     local -A repos=(["${myHOME}/.enterprise"]='https://github.com/ballab1/enterprise-config-for-git ballab1'
-                    ["${myHOME}/.work"]='https://github.com/ballab1/work-stuff'
                     ["${myHOME}/GIT/other/git-submodule-tools"]='https://github.com/ballab1/git-submodule-tools'
                     ["${myHOME}/.inf"]='https://github.com/ballab1/secrets'
                     ["${myHOME}/.tmux"]='https://github.com/ballab1/tmux_config'
@@ -185,6 +224,8 @@ function systemSetup.14_getGitRepos() {
     local dir
     for dir in "${!repos[@]}"; do
         [ -d "$dir" ] || isDone=1
+        local key="${myHOME}/src/keys/$(basename "$(git remote -v|awk '{print $2;exit}')").key"
+        [ -e "$key" ] && git-crypt unlock "$key"
     done
     [ $isDone -eq 0 ] && return 0 
     if [[ -z ${myUID:-} || -z ${myGID:-} || -z ${myHOME:-} ]]; then
@@ -204,6 +245,8 @@ function systemSetup.14_getGitRepos() {
             systemSetup.run git clone --recurse-submodules "${repoInfo[0]}" "$dir"
         fi
         find "$dir" -exec chown "${myUID}:$myGID" '{}' \;
+        local key="${myHOME}/src/keys/$(basename "$(git remote -v|awk '{print $2;exit}')").key"
+        [ -e "$key" ] && git-crypt unlock "$key"
     done
 }
 
@@ -238,33 +281,6 @@ function systemSetup.15_redirectOwnBashFiles() {
 
 #----------------------------------------------------------------------------
 function systemSetup.16_unencryptRepos() {
-    if [ -z "$(which git-crypt)" ]; then
-        if [ ! -e "${myHOME}/.bin/$(uname -m)/git-crypt" ]; then
-            echo 'need "git-crpyt" installed before running'
-            return 0
-        fi
-    fi
-    if [ ! -e $CRYP_SECRET ]; then
-        echo 'need to obtain secret key before running'
-        return 0
-    fi
-    if [[ -z ${myUID:-} || -z ${myGID:-} ]]; then
-        echo 'need to run this from non-user'
-        return 0
-    fi
-    local -a repoDirs=("${myHOME}/.inf"
-                       "${myHOME}/.work"
-                       "${myHOME}/.ssh"
-                      )
-
-    [ -z "$(which git-crypt)" ] && systemSetup.run sudo ln -s "${myHOME}/.bin/$(uname -m)/git-crypt" /usr/local/git-crypt
-    local dir
-    for dir in "${repoDirs[@]}"; do
-        pushd "$dir"
-        git-crypt unlock "$CRYP_SECRET"
-        popd
-        chown -R "${myUID}:$myGID" "$dir"
-    done
 
     systemSetup.verifyPermisions 755 "$myHOME"
     systemSetup.verifyPermisions 700 "${myHOME}/.ssh"
@@ -276,29 +292,13 @@ function systemSetup.16_unencryptRepos() {
 
 #----------------------------------------------------------------------------
 function systemSetup.17_updateHosts() {
+
     [ "$(hostname -s).home" = "$(hostname -f)" ] && return 0
     if [ ! -e "${myHOME}/.inf/hosts" ]; then
         echo 'need to run this from non-user'
         return 0
     fi
 cat << EOF
-  modify /etc/netplan/50-cloud-init.yaml
-    network:
-        version: 2
-        renderer: networkd
-        ethernets:
-            eno1:
-                dhcp4: true
-                dhcp6: true
-                nameservers:
-                    search: [ ubuntu.home, home ]
-
-  modify /etc/hostname
-   - include dns '.home' suffix
-
-  then run netplan try
-  set hostname using:  hostnamectl set-hostname s2.ubuntu.home
-  verify with hostname -s, hostname -f, systemd-resolve --status
 EOF
 }
 
@@ -323,52 +323,6 @@ function systemSetup.18_updateUsersAndGroups() {
     [ "$(getent passwd webdav)" ] || systemSetup.run useradd --no-create-home --gid 2222 --uid 2222 --shell /sbin/nologin webdav 
 
     systemSetup.run usermod --groups "$myNAME",docker,jenkins,nginx,nagios,www-data,webdav "$myNAME"
-}
-
-#----------------------------------------------------------------------------
-function systemSetup.19_networkMounts() {
-    local target=/etc/fstab
-    [[ "$(grep -scE '\s+/mnt/(WDMyCloud|Synology)\s+' "$target")" -eq 3 && \
-       -d /mnt/WDMyCloud && \
-       -d /mnt/Synology && \
-       -d /mnt/ubuntu && \
-       -d "${myHOME}/src" ]] && return 0
-
-
-    echo 'Setting up mounts for network shares'
-    [ -d /mnt/WDMyCloud ] || mkdir -p /mnt/WDMyCloud ||:
-    [ -d /mnt/Synology ] || mkdir -p /mnt/Synology ||:
-    [ -d /mnt/ubuntu ] || mkdir -p /mnt/ubuntu ||:
-    [ -d "${myHOME}/src" ] || mkdir -p "${myHOME}/src" ||:
-
-    cat << EOF >> "$target"
-#
-#10.3.1.4:/volume1/WdMyCloud /mnt/Synology nfs vers=4
-#10.3.1.5:/nfs /mnt/WDMyCloud nfs vers=3
-#
-nas.home:/volume1/ubuntu /mnt/ubuntu nfs vers=4
-/mnt/ubuntu /home/bobb/src        none    bind
-EOF
-    mount -a ||:
-}
-
-#----------------------------------------------------------------------------
-function systemSetup.20_pythonSupport() {
-
-    [ "$(which pip)" ] && (python3 -c "import yaml; print(yaml.__version__)" &> /dev/null) && return 0
-
-
-    echo 'Setting up YAML support via python'
-    if [ -z "$(which pip)" ]; then
-        curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-        python3 get-pip.py
-        rm get-pip.py
-    fi
-
-
-    (python3 -c "import yaml; print(yaml.__version__)" &> /dev/null) && return 0
-    pip install pyyaml==5.3.1 confluent_kafka==1.5.0
-    python3 -c "import yaml; print(yaml.__version__)"
 }
 
 #----------------------------------------------------------------------------
@@ -452,24 +406,37 @@ function systemSetup.run() {
 }
 
 #----------------------------------------------------------------------------
-function systemSetup.saveDefaultDockerCompose() {
-    local -r compose="$(command -v docker-compose)"
-    [ "$compose" ] || return 0
-
-    local -r dc_compose_ver=$(docker-compose --version | awk '{ print substr($3,0,length($3)-1)}')
-    [ "$DC_COMPOSE_VER" = "$dc_compose_ver" ] && return 0
-
-    echo 'Updating docker-compose to v'"$DC_COMPOSE_VER"
-    if [ ! -h "$compose" ]; then
-        echo 'Saving default docker-compose'
-        [ -e "/usr/local/bin/docker-compose.$dc_compose_ver" ] || mv "$compose" "/usr/local/bin/docker-compose.$dc_compose_ver"
-    fi
-    [ ! -e /usr/bin/docker-compose ] || rm /usr/bin/docker-compose
+function systemSetup.showEnvironment() {
+    env
 }
 
 #----------------------------------------------------------------------------
-function systemSetup.showEnvironment() {
-    env
+function systemSetup.updateApp() {
+
+    local -r file="${1:?}"
+    local -r target="${2:?}"
+    local -r version="${3:?}"
+    local -r url="${4:?}"
+
+
+    local -r app="$(basename "target")"
+    if [ "$(command -v "$app")" ]; then
+
+        local -r app_ver=$("$app" --version | awk '{ print substr($3,0,length($3)-1)}')
+        if [ "$version" != "$app_ver" ]; then
+            echo "Updating $app to '$version'"
+            if [ ! -h "$app" ]; then
+                echo "Saving default $app"
+                [ -e "/usr/local/bin/$app.$app_ver" ] || mv "$app" "/usr/local/bin/$app.$app_ver"
+            fi
+            [ ! -e "$app" ] || rm "$$app"
+        fi
+    fi
+
+    echo "Downloading $version of $app"
+    systemSetup.run curl -L "$url" -o "$file"
+    chmod 755 "$file"
+    systemSetup.run ln -s "$file" "$target"
 }
 
 #----------------------------------------------------------------------------
@@ -487,7 +454,7 @@ function systemSetup.checkUser()
 {
     local uid="$(getent passwd bobb)"
     [ -z "${uid:-}" ] && return 0
-    [ "$(cut -d ':' -f 1)" = 1026 ] && return 0
+    [ "$(echo "$uid" | cut -d ':' -f 3)" = 1026 ] && return 0
     echo 'invalid UID. Change UID to 1026 for nas compatibility'
     exit 1
 }
@@ -531,7 +498,8 @@ set -o nounset
 set -o pipefail
 IFS=$'\n\t'
 
-declare -r DC_COMPOSE_VER=2.5.1
+declare -r DOCKER_COMPOSE_VER=2.5.1
+declare -r GIT_CRIPT_VER=0.7.0
 declare -r CRYP_SECRET=~/.crypt-key
 declare -r USER_INFO_FILE=/tmp/userInfo
 declare -r PROGNAME="$(basename "${BASH_SOURCE[0]}")"
