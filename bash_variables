@@ -8,6 +8,7 @@ export GITHUB_USER=ballab1
 export HUB_PROTOCOL=https
 #export HUB_VERBOSE=1
 export GRADLE_USER_HOME=/home/bobb
+export KUBECONFIG=/home/bobb/.kube
 
 export KAFKA_CLUSTER='home'
 #export KAFKA_AVRO_HOSTS=s3.ubuntu.home,s4.ubuntu.home,s6.ubuntu.home
@@ -37,4 +38,4 @@ PROMPT_COMMAND='__git_ps1 "\\[\\e[1;32m\\]\u@\h\\[\\e[0m\\] \\[\\e[1;33m\\]\w\\[
 [ -f ~/.inf/secret.properties ] && export __SECRETS_FILE=~/.inf/secret.properties
 
 
-export PATH=${PATH}:/home/bobb/.bin:/home/bobb/.krew/bin:/home/bobb/.bin/git:/home/bobb/.bin/test
+export PATH=${PATH}:/home/bobb/.bin::/home/bobb/.bin/git:/home/bobb/.bin/test

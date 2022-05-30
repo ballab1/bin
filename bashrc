@@ -121,3 +121,5 @@ fi
 [ -f ~/.bin/bash_variables ] && source ~/.bin/bash_variables
 
 true
+
+complete -C /usr/local/bin/tk.v0.21.0 tk

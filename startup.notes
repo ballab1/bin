@@ -1,6 +1,10 @@
 TODO
 ```
 
+# as bobb
+git clone --recursive https://github.com/ballab1/bin .bin
+
+# as root from bobb
 USER=bob_tmp
 adduser --no-create-home --ingroup users --shell /bin/bash "$USER"
 cat > /etc/sudoers.d/myOverrides << EOF
@@ -8,18 +12,13 @@ $USER      ALL=(ALL:ALL) NOPASSWD:  ALL
 EOF
 
 # as root from "$USER"
+# ensure jenkins agent has been disconnected
 ps faux | grep '^bobb'
 usermod -g users --uid 1026 bobb
-chown -R root:root /home
+chown root:root /home
 
-# as root from bobb
-userdel "$USER"
-rm /etc/sudoers.d/myOverrides
 
-apt-get update
-apt-get install -y apt-transport-https ca-certificates curl software-properties-common
-ensure jenkins agent has been disconnected
-
+# as bobb
 /home/bobb/.bin/systemSetup 00
 /home/bobb/.bin/systemSetup 01
 
