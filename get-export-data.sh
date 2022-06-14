@@ -1,6 +1,6 @@
 #!/bin/bash
 
-declare -a kafka_hosts=( 's3.ubuntu.home' 's4.ubuntu.home' 's8.ubuntu.home' )
+declare -a kafka_hosts=( 's3.ubuntu.home' 's7.ubuntu.home' 's8.ubuntu.home' )
 declare -a kafka_ports=( 7202 7204 9999 )
 declare -a unix_hosts=( 's2.ubuntu.home' 's3.ubuntu.home' 's4.ubuntu.home' 'nas.home' 'wdmycloud.home' 'pi.ubuntu.home' )
 declare -a unix_ports=( 9100 )

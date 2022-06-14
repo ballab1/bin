@@ -27,8 +27,8 @@ HOST_NAME=$(hostname -s)
 HOST_FQDN=$(hostname -f)
 CFG_USER_SECRETS=${CFG_USER_SECRETS:-}
 DOCKER_GID=$(getent group docker | cut -d: -f3)
-KAFKA_AVRO_HOSTS=${KAFKA_AVRO_HOSTS:-s3.ubuntu-s3.home,s4.ubuntu.home}
-KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS:-s3.ubuntu.home:9092,s4.ubuntuhome:9092}
+KAFKA_AVRO_HOSTS=${KAFKA_AVRO_HOSTS:-s3.ubuntu-s3.home,s7.ubuntu.home,s8.ubuntu.home}
+KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS:-s3.ubuntu.home:9092,s7.ubuntuhome:9092,s8.ubuntuhome:9092}
 KAFKA_CLUSTER=${KAFKA_CLUSTER:-home}
 EOF
 

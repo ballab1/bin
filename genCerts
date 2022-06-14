@@ -53,17 +53,18 @@ authorityKeyIdentifier = keyid, issuer
 subjectAltName = @alt_names
 
 [ alt_names ]
-DNS.1 = s2.ubuntu.home
-DNS.2 = s3.ubuntu.home
-DNS.3 = s4.ubuntu.home
-DNS.4 = s5.ubuntu.home
-DNS.5 = s6.ubuntu.home
-DNS.6 = s7.ubuntu.home
-DNS.7 = s8.ubuntu.home
-DNS.8 = wdmycloud.home
-DNS.9 = nas.home
-DNS.10 = *.ubuntu.home
-DNS.11 = *.home
+DNS.1 = s1.ubuntu.home
+DNS.2 = s2.ubuntu.home
+DNS.3 = s3.ubuntu.home
+DNS.4 = s4.ubuntu.home
+DNS.5 = s5.ubuntu.home
+DNS.6 = s6.ubuntu.home
+DNS.7 = s7.ubuntu.home
+DNS.8 = s8.ubuntu.home
+DNS.9 = wdmycloud.home
+DNS.10 = nas.home
+DNS.12 = *.ubuntu.home
+DNS.13 = *.home
 IP.1 = 127.0.0.1
 EOF
     echo "$tmp_script"
