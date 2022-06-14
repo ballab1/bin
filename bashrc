@@ -119,7 +119,7 @@ fi
 [ -f ~/.bin/git-prompt.sh ] && source ~/.bin/git-prompt.sh
 [ -f ~/.inf/docker.inf ] && source ~/.inf/docker.inf
 [ -f ~/.bin/bash_variables ] && source ~/.bin/bash_variables
-
+[ "$(snap list | grep -c 'microk8s')" -gt 0 ] && source <(microk8s.kubectl completion bash)
 true
 
 complete -C /usr/local/bin/tk.v0.21.0 tk

@@ -5,7 +5,7 @@ import sys
 
 CFG = {'windows': {'hosts': ['ballantyne.home'],                                                                               'ports': [9182],           'path': '/metrics'},
        'jenkins': {'hosts': ['jenkins-exporter.jenkins-exporter.svc.cluster.local'],                                           'ports': [9182],           'path': '/metrics'},
-       'kafka':   {'hosts': ['s3.ubuntu.home','s4.ubuntu.home','s6.ubuntu.home'],                                              'ports': [7202,7204,9999], 'path': '/metrics'},
+       'kafka':   {'hosts': ['s3.ubuntu.home','s4.ubuntu.home','s7.ubuntu.home'],                                              'ports': [7202,7204,9999], 'path': '/metrics'},
        'unix':    {'hosts': ['s2.ubuntu.home','s3.ubuntu.home','s4.ubuntu.home','nas.home','wdmycloud.home','pi.ubuntu.home'], 'ports': [9100],           'path': '/metrics'},
        'minio':   {'hosts': ['s1.ubuntu.home'],                                                                                'ports': [9000],           'path': '/minio/v2/metrics/cluster'}}
 

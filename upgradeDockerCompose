@@ -8,7 +8,7 @@ if [[ $EUID != 0 ]]; then
   exit
 fi
 
-declare version=2.5.1
+declare version=2.6.0
 
 curl  --location https://github.com/docker/compose/releases/download/v${version}/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose.${version}
 chmod 755 /usr/local/bin/docker-compose.${version}
