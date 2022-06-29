@@ -120,6 +120,16 @@ fi
 [ -f ~/.inf/docker.inf ] && source ~/.inf/docker.inf
 [ -f ~/.bin/bash_variables ] && source ~/.bin/bash_variables
 [ "$(snap list | grep -c 'microk8s')" -gt 0 ] && source <(microk8s.kubectl completion bash)
+if [ -f ~/.krew/bin/kubectl-krew ]; then
+    [ -f ~/.bin/kubectl-krew ] && rm ~/.bin/kubectl-krew
+    ln -s "$(readlink -f ~/.krew/bin/kubectl-krew)" ~/.bin/kubectl-krew
+    if [ ! -f /etc/bash_completion.d/krew ]; then
+        ~/.bin/kubectl-krew completion bash > /tmp/krew
+        sudo chown root:root /tmp/krew
+        sudo mv /tmp/krew /etc/bash_completion.d/krew
+    fi
+    export PATH="${PATH}:${HOME}/.krew/bin"
+fi
 true
 
 complete -C /usr/local/bin/tk.v0.21.0 tk
