@@ -7,23 +7,30 @@ if [ ${EUID:-0} -ne 0 ]; then
     exit
 fi
 
+# find procs which cause 'busy' and kill them
+#for p in $(lsof | GIT | awk '{print $2}');do kill "$p";done
 
-declare target=/etc/fstab
+
+
+
 declare -A mounts=( ['/mnt/ubuntu']='10.3.1.4:/volume1/ubuntu'
-                      ['/mnt/GIT']='10.3.1.4:/volume1/GIT'
-                      ['/mnt/k8s']='10.3.1.4:/volume1/K8S'
-                      ["/home/bobb/src"]='10.3.1.4:/volume1/ubuntu'
-                      ["/home/bobb/GIT"]='10.3.1.4:/volume1/GIT'
-                    )
+                    ['/mnt/GIT']='10.3.1.4:/volume1/GIT'
+                    ['/mnt/k8s']='10.3.1.4:/volume1/K8S'
+                    ['/mnt/Registry']='10.3.1.4:/volume1/Docker-Registry'
+                    ["/home/bobb/src"]='10.3.1.4:/volume1/ubuntu'
+                    ["/home/bobb/GIT"]='10.3.1.4:/volume1/GIT'
+                  )
+declare target=/etc/fstab
 
-umount /mnt/GIT
-umount /mnt/ubuntu
-umount /mnt/k8s
-umount /home/bobb/GIT
-umount /home/bobb/src
 
 for mnt in "${!mounts[@]}";do
-    [ -d "$mnt" ] || mkdir -p "$mnt"
+    [ "$(find "$(dirname "$mnt")" -maxdepth 1 -mindepth 1 -name "$(basename "$mnt")" 2>/dev/null)" ] || continue
+    umount "$mnt"
+done
+
+
+for mnt in "${!mounts[@]}";do
+    [ "$(find "$(dirname "$mnt")" -maxdepth 1 -mindepth 1 -name "$(basename "$mnt")" 2>/dev/null)" ] || continue
     sed -i "/${mnt//\//\\/} /d" "$target"
     printf '%s %s nfs rw,vers=4\n' "${mounts[$mnt]}" "${mnt}" >> "$target"
 done

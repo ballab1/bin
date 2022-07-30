@@ -131,6 +131,8 @@ function systemSetup.04_networkMounts() {
                       ["${myHOME}/src"]='10.3.1.4:/volume1/ubuntu'
                       ["${myHOME}/GIT"]='10.3.1.4:/volume1/GIT'
 #                      ['/mnt/homes']='10.3.1.4:/volume1/homes'
+#                      ['/mnt/Registry']='10.3.1.4:/volume1/Docker-Registry'
+
                     )
 
     touch "$target"
