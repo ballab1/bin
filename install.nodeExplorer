@@ -3,8 +3,8 @@
 #---------------------------------------------------------------------------------------------- 
 function downloadExporter() {
 
-    local MACHINE="$(getMachine)"
-    local NODE_EXPORTER_VER="node_exporter-${NODE_EXPORTER_VERSION}.linux-${MACHINE}"
+    local NODE_MACHINE="$(getMachine)"
+    local NODE_EXPORTER_VER="node_exporter-${NODE_EXPORTER_VERSION}.linux-${NODE_MACHINE}"
 
     cd /tmp
     wget "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/${NODE_EXPORTER_VER}.tar.gz"
