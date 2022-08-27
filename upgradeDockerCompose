@@ -8,9 +8,13 @@ if [[ $EUID != 0 ]]; then
   exit
 fi
 
-declare version=2.10.1
+declare version=2.10.2
+declare download="/usr/local/bin/docker-compose.${version}"
 
-curl  --location https://github.com/docker/compose/releases/download/v${version}/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose.${version}
-chmod 755 /usr/local/bin/docker-compose.${version}
+curl --silent --location https://github.com/docker/compose/releases/download/v${version}/docker-compose-$(uname -s)-$(uname -m) -o "$download"
+[ "$?" -eq 0 ] || exit 1
+[ "$(stat -c %s "$download")" -gt 100 ] || exit 1
+
+chmod 755 "$download"
 rm /usr/bin/docker-compose
-ln -s /usr/local/bin/docker-compose.${version} /usr/bin/docker-compose
+ln -s "$download" /usr/bin/docker-compose
