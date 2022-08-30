@@ -8,7 +8,7 @@ export GITHUB_USER=ballab1
 export HUB_PROTOCOL=https
 #export HUB_VERBOSE=1
 export GRADLE_USER_HOME=/home/bobb
-export KUBECONFIG=/home/bobb/.kube
+export KUBECONFIG=/home/bobb/.kube/config
 
 export KAFKA_CLUSTER='home'
 #export KAFKA_AVRO_HOSTS=s3.ubuntu.home,s7.ubuntu.home,s8.ubuntu.home
