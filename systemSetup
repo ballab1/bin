@@ -73,13 +73,15 @@ EOF
 function systemSetup.02_requiredPackages() {
 
     echo 'Setting up required packages'
+
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+    chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
 
     add-apt-repository universe
     apt-get update
     systemSetup.run apt install -y build-essential nfs-common nfs-kernel-server tasksel libxml2 libxml2-dev
-    systemSetup.run apt install -y openjdk-8-jre-headless cifs-utils docker-compose jq gh xmlstarlet
+    systemSetup.run apt install -y openjdk-11-jre-headless cifs-utils docker-compose jq gh xmlstarlet
     systemSetup.run apt install -y python3 python3-pip
     systemSetup.run apt install -y libssl-dev librdkafka++1 librdkafka1 python3-confluent-kafka
     systemSetup.run apt install -y net-tools
