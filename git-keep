@@ -37,7 +37,7 @@ function gitReferenceBranch()
 function history()
 {
     # search and display the history in current local workspace for any previous occasions where 'git-keep' was used
-    [ $DEBUG -ne 0 ] && echo -e "${grey}git reflog | grep ':git keep:'$reset"
+    [ "$DEBUG" -ne 0 ] && echo -e "${grey}git reflog | grep ':git keep:'$reset"
     git reflog | grep ':git keep:' | more
     exit 0
 }
@@ -49,7 +49,7 @@ function keep()
     declare message="${2:?}"
 
     # merge content into specified commit of current branch
-    if [ $(git rev-parse --abbrev-ref HEAD) = "$REF" ] || [ $(git rev-parse HEAD) == $(git ls-remote --heads --quiet | grep "$REF" | cut -d ' ' -f 1) ]; then
+    if [ "$(git rev-parse --abbrev-ref HEAD)" = "$REF" ] || [ "$(git rev-parse HEAD)" == "$(git ls-remote --heads --quiet | grep "$REF" | cut -d ' ' -f 1)" ]; then
         run "git add -A"
         run "git commit -m ':git keep: $(date)'"
         run "git reset --soft $commit"
