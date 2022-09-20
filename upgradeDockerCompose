@@ -1,17 +1,29 @@
 #!/bin/bash
 
+declare VERSION="${1:-2.11.1}"
+
+# if provided with 'all' parameter
+if [ "$#" -gt 0 ] && [ "$1" = 'all' ]; then
+   declare cmd="$(readlink -f "$0")"
+   for h in pi s{1..8};do
+     ssh "$h.ubuntu.home" "$cmd $VERSION"
+   done
+   exit
+fi
+
+# do not run on pi or s2
 [ "$(uname -m)" = 'x86_64' ] || exit
 
 # ensure this script is run as root
 if [[ $EUID != 0 ]]; then
-  sudo --preserve-env $0
+  sudo --preserve-env "$0" "$@"
   exit
 fi
 
-declare version=2.11.0
-declare download="/usr/local/bin/docker-compose.${version}"
+# perform update
+declare download="/usr/local/bin/docker-compose.${VERSION}"
 
-curl --silent --location https://github.com/docker/compose/releases/download/v${version}/docker-compose-$(uname -s)-$(uname -m) -o "$download"
+curl --silent --location https://github.com/docker/compose/releases/download/v${VERSION}/docker-compose-$(uname -s)-$(uname -m) -o "$download"
 [ "$?" -eq 0 ] || exit 1
 [ "$(stat -c %s "$download")" -gt 100 ] || exit 1
 
