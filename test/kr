@@ -1,0 +1,12 @@
+#!/bin/bash
+
+[ -e /home/bobb/git.log ] && rm /home/bobb/git.log
+mv /home/bobb/.local/bin/git.x /home/bobb/.local/bin/git
+sudo mv /usr/bin/git /usr/bin/git.x
+
+cd /home/bobb/.krew/index/default
+kubectl krew upgrade
+
+mv /home/bobb/.local/bin/git /home/bobb/.local/bin/git.x
+sudo mv /usr/bin/git.x /usr/bin/git
+[ -e /home/bobb/git.log ] && cat /home/bobb/git.log

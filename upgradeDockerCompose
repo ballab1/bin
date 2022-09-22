@@ -1,14 +1,23 @@
-#!/bin/bash
+#!/usr/bin/bash
 
-declare VERSION="${1:-2.11.1}"
 
-# if provided with 'all' parameter
-if [ "$#" -gt 0 ] && [ "$1" = 'all' ]; then
-   declare cmd="$(readlink -f "$0")"
-   for h in pi s{1..8};do
-     ssh "$h.ubuntu.home" "$cmd $VERSION"
-   done
-   exit
+declare VERSION=2.11.1
+declare re='^\d+\.\d+\.\d+$'
+
+ # if provided with 'all' parameter
+if [ "$#" -gt 0 ]; then
+   if [[ "$1" =~ $re ]]; then
+     VERSION="$1"
+
+   elif [ "$1" = 'all' ]; then
+     declare cmd="$(readlink -f $(which "$0"))"
+     for h in pi s{1..8};do
+       echo "$h.ubuntu.home"
+#       ssh "$h.ubuntu.home" "$cmd"
+       ssh "$h.ubuntu.home" '/home/bobb/.bin/upgradeDockerCompose'
+     done
+     exit
+   fi
 fi
 
 # do not run on pi or s2
