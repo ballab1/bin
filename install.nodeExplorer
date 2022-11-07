@@ -11,6 +11,8 @@ function downloadExporter() {
     tar xzf "${NODE_EXPORTER_VER}.tar.gz"
     cd "${NODE_EXPORTER_VER}"
     mv node_exporter "/usr/local/bin/${NODE_EXPORTER_VER}"
+    chown root:root "/usr/local/bin/${NODE_EXPORTER_VER}"
+    [ -f "$NODE_EXPORTER" ] && rm "$NODE_EXPORTER"
     ln -s "/usr/local/bin/${NODE_EXPORTER_VER}" "$NODE_EXPORTER"
     cd ..
     rm -rf "${NODE_EXPORTER_VER}"*
@@ -174,7 +176,7 @@ function setup.textfile_collector() {
 #---------------------------------------------------------------------------------------------- 
 function install.node_exporter() {
 
-    [ -f /usr/sbin/node_explorer ] && rm /usr/sbin/node_explorer
+    [ -f "$NODE_EXPORTER" ] && rm "$NODE_EXPORTER"
     downloadExporter
     [ -f /etc/node_exporter.opts ] && rm /etc/node_exporter.opts
     node_exporter.options > /etc/node_exporter.opts
@@ -206,7 +208,7 @@ if [[ $EUID != 0 ]]; then
   exit
 fi
 
-export NODE_EXPORTER_VERSION='1.3.1'
-export NODE_EXPORTER='/usr/sbin/node_explorer'
+export NODE_EXPORTER_VERSION='1.4.0'
+export NODE_EXPORTER='/usr/sbin/node_exporter'
 
 install.node_exporter
