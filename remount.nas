@@ -28,6 +28,10 @@ for mnt in "${!mounts[@]}";do
     umount "$mnt"
 done
 
+while read mnt; do
+    umount "$mnt"
+done < <(mount | grep '^10.3.1.4' | awk '{ print $3 }')
+
 
 for mnt in "${!mounts[@]}";do
     [ "$(find "$(dirname "$mnt")" -maxdepth 1 -mindepth 1 -name "$(basename "$mnt")" 2>/dev/null)" ] || continue
