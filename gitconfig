@@ -38,3 +38,5 @@
 [url "git@github.com/ballab1"]
     pushInsteadOf = git@github.com/ballab1
    
+[init]
+	defaultBranch = main
