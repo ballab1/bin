@@ -1,0 +1,23 @@
+#!/bin/bash
+#############################################################################
+#
+#   keptBack.packages
+#
+#############################################################################
+
+# ensure this script is run as root
+if [[ $EUID != 0 ]]; then
+  sudo --preserve-env "$0" "$@"
+  exit
+fi
+
+# perform update
+apt update
+declare -a keptBack
+mapfile -t keptBack < <(apt list --upgradable 2>/dev/null|cut -d "/" -f 1|sed -e '1d')
+if [  "${#keptBack[*]}" -ge 0 ]; then
+    sudo apt update
+    sudo apt install ${keptBack[@]}
+else
+    echo 'Nothing to do'
+fi
