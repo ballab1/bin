@@ -21,7 +21,7 @@ EOF
 function gitReferenceBranch()
 {
     local ref="$(git config --get core.branch)"
-    [ -z "$ref" ] && ref='master'
+    [ -z "$ref" ] && ref='main'
     echo $ref
 }
 

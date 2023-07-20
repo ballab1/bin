@@ -4,7 +4,7 @@
 function gitReferenceBranch()
 {
     local ref="$(git config --get core.branch)"
-    [ -z "$ref" ] && ref='master'
+    [ -z "$ref" ] && ref='main'
     echo $ref
 }
 
@@ -35,7 +35,7 @@ done < <(git for-each-ref --format="%(refname:lstrip=2)" refs/heads)
 
 # do nothing when $ref does not exist
 if [ $count -eq 0 ]; then
-    echo -e "    \e[93m${master} branch does not exist\e[0m"
+    echo -e "    \e[93m${main} branch does not exist\e[0m"
     exit 0
 fi
 
@@ -45,13 +45,13 @@ while read -r test_branch; do
 
     [ "$test_branch" = "$ref" ] && continue
 
-    git rev-list --left-right ${test_branch}...origin/${master} -- 2>/dev/null >/tmp/git_upstream_status_delta || continue
+    git rev-list --left-right ${test_branch}...origin/${main} -- 2>/dev/null >/tmp/git_upstream_status_delta || continue
     LEFT_AHEAD=$(grep -c '^<' /tmp/git_upstream_status_delta)
     RIGHT_AHEAD=$(grep -c '^>' /tmp/git_upstream_status_delta)
     [ $LEFT_AHEAD -eq 0 ] && [ $RIGHT_AHEAD -eq 0 ] && continue
     echo "${repo} | ${test_branch} (ahead $LEFT_AHEAD) | (behind $RIGHT_AHEAD) origin/$ref"
 
-#    declare distance=$(git rev-list --left-right --count origin/${master}...${test_branch} | awk '{print $2}')
+#    declare distance=$(git rev-list --left-right --count origin/${main}...${test_branch} | awk '{print $2}')
 #    [ "$distance" -eq 0 ] && continue
 #    echo "${repo} ${test_branch}:  ${distance} commits from $ref"
 

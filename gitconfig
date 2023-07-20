@@ -18,7 +18,7 @@
 [core]
     symlinks = true
     editor = vim
-    branch = master
+    branch = main
 [push]
     default = simple
 
@@ -30,7 +30,7 @@
 
 [hub]
     protocol = https
-    host = eos2git.cec.lab.emc.com
+    host = github.com
 
 [url "https://github.com/ballab1"]
     pushInsteadOf = https://github.com/ballab1
@@ -39,4 +39,4 @@
     pushInsteadOf = git@github.com/ballab1
    
 [init]
-	defaultBranch = main
+    defaultBranch = main

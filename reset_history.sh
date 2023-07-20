@@ -20,7 +20,7 @@ function resetHistory() {
         git push --force
     done
 
-    git checkout master
+    git checkout main
     git tag v3.4
     git push origin --tags
     git branch --delete dev
@@ -129,7 +129,7 @@ for dir in $(git submodule status | awk '{print $2}'); do
         git pull
     done
 
-    git checkout master
+    git checkout main
     git tag v3.4
     git push origin --tags
     git checkout dev
