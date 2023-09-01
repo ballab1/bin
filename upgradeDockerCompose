@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 
 
-declare VERSION=2.20.2
+declare VERSION=2.20.3
 declare re='^\d+\.\d+\.\d+$'
 
  # if provided with 'all' parameter
