@@ -1,0 +1,377 @@
+#!/bin/bash
+
+#----------------------------------------------------------------------------------------------
+function updateReferenceBranch.usage()
+{
+    local -i exit_status=${1:-1}
+
+    cat >&2 << EOF
+Usage:
+    $PROGNAME [ -h|--help ] | [ <repoName> <repoName> <repoName> ]
+
+    Common options:
+        -h --help              Display a basic set of usage instructions
+        -u --user <userid>     corp user id, if not specified it will default to environment variable \$USERNAME and then \$USER
+        -c --credentials <credentials_file>   File container key/value pairs for user=pwd
+
+    Curate a docker repository, where <repoName> is its name
+
+
+EOF
+    exit "$exit_status"
+}
+
+#----------------------------------------------------------------------------------------------
+function updateReferenceBranch.cmdLineArgs()
+{
+    # Parse command-line options into above variable
+    local longOpts='help,HELP,Help,credentials:,user:,debug'
+    local shortOpts='hHc:u:d'
+    local -r options=$(getopt --longoptions "$longOpts" --options "$shortOpts" --name "$PROGNAME" -- "$@") || updateReferenceBranch.usage $?
+    eval set -- "$options"
+
+    local -A opts=()
+    while [ "${1:-}" ]; do
+        case "${1,,}" in
+            help|-h|--h|-help|--help)
+                updateReferenceBranch.usage;;
+
+            -c|-credentials|--credentials)
+                [[ $# -eq 0 || $2 = -* ]] && trap.die 'invalid arguments!'
+                opts['credentials']="$2"
+                shift 2;;
+
+            -d|-debug|--debug)
+                opts['debug']=1
+                shift;;
+
+            -u|-user|--user)
+                [[ $# -eq 0 || $2 = -* ]] && trap.die 'invalid arguments!'
+                opts['user']="$2"
+                shift 2;;
+
+            --)
+                shift
+                break;;
+
+            *)
+                break;;
+
+        esac
+    done
+
+    # show args
+    if [ ${opts['debug']:-0} -gt 0 ]; then
+        {
+            for i in "${!opts[@]}"; do
+               printf '%s: %s\n' $i "${opts[$i]}"
+            done
+            echo 'args:'
+            for i in "$@"; do
+               printf '   %s\n' "$i"
+            done
+            echo
+        } >&2
+    fi
+
+    appenv.results "$@"
+}
+
+#-----------------------------------------------------------------------------------------
+function updateReferenceBranch.downloadArg()
+{
+    local file=${1:?}
+    local id=${2:?}
+
+    # exclude commented lines | find only lines with specified ['$id']= | extract value after '='
+    grep -vE '^\s*#' "$file" | \
+    grep "\['$id'\]=" | \
+    sed -E "s|\s+\['$id'\]=.(.+).|\1|"
+}
+
+#-----------------------------------------------------------------------------------------
+function updateReferenceBranch.downloadFiles()
+{
+    local -r pdrDir=${1:?}
+    local -r downDir=${2:?}
+
+    pushd "$pdrDir" > /dev/null
+    while read -r dd; do
+        for f in $(ls -1A "$dd"); do
+            updateReferenceBranch.processDownloadDefinitionFile "${pdrDir}/${dd:2}/$f" "$downDir"
+        done
+    done < <(find . -type d -wholename '*action_folders*' -name '04.downloads')
+    popd > /dev/null
+}
+
+#-----------------------------------------------------------------------------------------
+function updateReferenceBranch.main()
+{
+    declare -A OPTS
+    eval OPTS=( ${1:?} )
+    readonly OPTS
+    shift
+
+    [ "${OPTS['credentials']:-}" ] && __SECRETS_FILE="${OPTS['credentials']}"
+    if [ "${OPTS['user']:-}" ]; then
+        export USERNAME="${OPTS['user']}"
+        export USER="${OPTS['user']}"
+
+        export _REGISTRY_USER="${OPTS['user']}"
+        export _REGISTRY_CREDENTIALS=$(custom.credentials artifactory)
+    fi
+
+
+    declare -r refRepo=${REF_REPO:-https://github.com/ballab1/support}"
+    declare -r pdrRepo="${PDR_REPO:-https://eos2git.cec.lab.emc.com/Devops/container_build_PDR}"
+    declare -r referenceBranch="${REFERENCE_BRANCH:-reference/github}"
+    declare -r public_branch="${PUBLIC_BRANCH:-dev}"
+    declare DRY_RUN=0   # set to non-0 for dry-run
+
+    set -o noglob
+    updateReferenceBranch.setExitHandler
+
+
+    # create some working directories
+    declare -r referenceDir="$(mktemp -d)"
+    declare -r tmpDir="$(mktemp -d)"
+    declare -r downloadDir="$(mktemp -d)"
+
+    # setup other 'special' variables used by kafka-broker & phpmyadmin
+    declare -A BROKER PHPMYADMIN
+    export KAFKA_DISTRO=2.12
+    export WWW=/tmp
+    BROKER['distro']="$KAFKA_DISTRO"
+    PHPMYADMIN['language']=english
+
+
+    if [ -z "${DO_UPDATE:-}" ]; then
+        # [DEFAULT OPTION] update tracking branch and upload files to Artifactory
+        updateReferenceBranch.updateTrackingBranchesFromReference "$referenceDir" "$tmpDir" "$downloadDir" "$referenceBranch" "$public_branch"
+    else
+        # just check the checksums and put stuff in Artifactory (unless we are in DRY_RUN mode)
+        updateReferenceBranch.downloadFiles "$(pwd)" "$downloadDir"
+    fi
+}
+
+#-----------------------------------------------------------------------------------------
+function updateReferenceBranch.moveFiles()
+{
+    local -r src=${1:?}
+    local -r dst=${2:?}
+
+    if [ -d $src ]; then
+        if [ -d $dst ]; then
+            mv "$src"/* "$dst"/
+            mv "$src"/.* "$dst"/
+        else
+            mv "$src" "$dst"
+        fi
+    fi
+}
+
+#-----------------------------------------------------------------------------------------
+function updateReferenceBranch.processDownloadDefinitionFile()
+{
+    local -r downDefn=${1:?}
+    local -r downDir=${2:?}
+
+    # [[ "$downDefn" = *'gradle/build/action_folders/04.downloads/01.GRADLE' ]] || return 0
+    echo "Processing downloads in ${downDefn}"
+
+    # format of ${downDefn}:
+    #    ['version']=${ZOOKEEPER_VERSION:?}
+    #    ['file']="/tmp/zookeeper-${ZOOKEEPER['version']}.tgz"
+    #    ['url']="http://www-us.apache.org/dist/zookeeper/zookeeper-${ZOOKEEPER['version']}/zookeeper-${ZOOKEEPER['version']}.tar.gz"
+    #    ['sha256_3.4.10']="7f7f5414e044ac11fee2a1e0bc225469f51fb0cdf821e67df762a43098223f27"
+    #    ['sha256_3.4.13']="7ced798e41d2027784b8fd55c908605ad5bd94a742d5dab2506be8f94770594d"
+
+    local vFile=$(updateReferenceBranch.downloadArg "$downDefn" 'file')
+    local vUrl=$(updateReferenceBranch.downloadArg "$downDefn" 'url')
+    local vName=$(updateReferenceBranch.versionArg "$downDefn" 'version')
+
+
+    # strip path & prefix from file to get name
+    local name="$( basename "$downDefn" )"
+    name="${name#[0-9][0-9].}"
+    name="${name%.alpine}"
+    name="${name%.centos}"
+    name="${name%.ubuntu}"
+    name="${name%.fedora}"
+
+
+    # change reference in download definition file to an internal reference
+    local package="$(echo "$downDefn" | awk -F '/' '{print $(NF-4)}')"
+    package="${package,,}"
+    local urlDefForArtifactory="$(artifactory.URL)/cyclone-devops/cyclone-devops/${package}/$(basename "$vFile")"
+    sed -i -E "s|^(\s+\['url'\]=).(.+).|\1\"${urlDefForArtifactory}\"|" "$downDefn"
+
+
+    # extract array of versions from checksum definitions. NEEDS ALL checksum definitions to be formated as ['sha256_vX.Y']="...." (where vX.y is version)
+    local -a versions=()
+    mapfile -t versions < <(grep -E "^[[:blank:]]+\['sha256_" "$downDefn" | sed -E "s|^\s+\['sha256_(.*)'\]=.*|\1|")
+    [ ${#versions[*]} -gt 0 ] || return 0
+
+    for version in "${versions[@]}"; do (
+        set +o errexit
+        trap - ERR
+        [ "$vName" != 'KAFKA_VERSION' ] || version="${version//$KAFKA_DISTRO-}"
+
+        # set the export for the VERSION name
+        eval export $vName=$version
+
+        term.log "    Downloading:  ${name} :: $version\\n" 'green'
+        [[ "$(declare -p "$name" 2>&1 ||:)" = *"$name: not found" ]] && declare -A $name
+        eval "$name['version']=$version"
+
+        local file="$(eval echo $vFile)"
+        local url="$(eval echo $vUrl)"
+        local sha256=$(updateReferenceBranch.downloadArg "$downDefn" "sha256_$version")
+        local downloadFile="${downDir}/$(basename "$file")"
+        local uploadFile="${package}/$(basename "$file")"
+
+        echo -n '    '
+        if wget --no-check-certificate --no-verbose --output-document "$downloadFile" "$url" ;then
+            #verify checksum
+            local result=$(echo "${sha256}  ${downloadFile}" | sha256sum -cw 2>&1)
+            if [[ "$result" == *'FAILED'* ]]; then
+                term.log "    ..Incorrect checksum for ${downloadFile}\n" 'warn'
+                term.log "    expected:   ${sha256}\n" 'warn'
+                term.log "    actual:     $( sha256sum "${downloadFile}" | awk '{ print $1 }')\n" 'error'
+                exit 0
+            fi
+            if [[ "$result" == *' WARNING: '* ]]; then
+                term.log "    ..failed to successfully download ${downloadFile}. Retrying....\n" 'white'
+                exit 0
+            fi
+            term.log "    uploading to Artifactory: '$uploadFile'\\n" 'green'
+            [ $DRY_RUN -ne 0 ] || (echo -n '    ' | artifactory.uploadFile "$uploadFile"  "$downloadFile")
+            rm "$downloadFile"
+        else
+            trap.log "failed to download ${url}. Skipping upload to Artifactory." 'error'
+        fi
+
+    ); done
+}
+
+#-----------------------------------------------------------------------------------------
+function updateReferenceBranch.setExitHandler()
+{
+    _clean_up() {
+        local -i status=$?
+        [ -z "${_exitChain:-}" ] || ( "$_exitChain" ||: )
+
+        local -a mustDelete=( "${downloadDir:-}" "${CBF_PROPERTIES_FILE:-}" "${CRF_PROPERTIES_FILE:-}" )
+        if [ $DRY_RUN -eq 0 ]; then
+            mustDelete+=( "${referenceDir:-}" "${tmpDir:-}" )
+        else
+            local tstamp='test'
+#            tstamp="$(date +%Y%m%d%k%M%S%N)"
+            [ -z "${referenceDir:-}" ] && [ -d "${referenceDir:-}" ] || ([ -d "/tmp/refDir.$tstamp" ] && rm -rf "/tmp/refDir.$tstamp"; mv "$referenceDir" "/tmp/refDir.$tstamp")
+            [ -z "${tmpDir:-}" ] && [ -d "${tmpDir:-}" ] || ([ -d "/tmp/pdrDir.$tstamp" ] && rm -rf "/tmp/pdrDir.$tstamp"; mv "$tmpDir" "/tmp/pdrDir.$tstamp")
+        fi
+
+        for f in "${mustDelete[@]}"; do
+            [ -z "$f" ] || [ ! -e "$f" ] || rm -rf "$f"
+        done
+        exit $status
+    }
+    declare -x _exitChain=$(trap -p EXIT | awk '{print $3}' | tr -d "'")
+    trap _clean_up EXIT
+}
+
+#-----------------------------------------------------------------------------------------
+function updateReferenceBranch.updateTrackingBranchesFromReference()
+{
+    local -r refDir=${1:?}
+    local -r pdrDir=${2:?}
+    local -r download_dir=${3:?}
+    local -r reference_branch=${4:?}
+    local -r public_branch=${5:?}
+
+    term.log '\nClone the public (reference) repo & get rid of the files we do not want internally\n' 'green'
+    git clone --recursive "$refRepo" -b "$public_branch" "$refDir"
+    find "$refDir" -type f \( -name '.git' -or -name '.gitmodules'  -or -name '.lfsconfig' -or -iname 'License' \) -delete
+    rm -rf "$refDir/.git"
+
+    term.log '\nClone internal DELL/EMC repo and setup our tracking branches\n' 'green'
+    git clone --recursive "$pdrRepo" -b "$reference_branch" "$pdrDir"
+    pushd "$pdrDir"
+
+    term.log '\nIterate through the reference repo and move content into our tracking branches\n' 'green'
+    for f in $(ls -1A "$refDir"); do
+        [ "$f" = 'versions' ] && continue
+
+
+        local dst="$pdrDir/$f"
+        local src="$refDir/$f"
+        if [ -d "$src" ]; then
+            [ -d "$dst" ] || continue
+
+            term.log "\\nProcessing ${f}\\n" 'green'
+            pushd $dst > /dev/null
+            git checkout "$reference_branch"
+            find . -type f ! \( -name '.git' -or -name '.lfsconfig' \) -delete
+            find . -mindepth 2 -type d -delete || true
+            while read -r fl; do
+                [ -e "$dst/$fl" ] && continue
+                mkdir -p "$(dirname "$dst/$fl")"
+                mv "$src/$fl" "$dst/$fl"
+            done < <(find "$src" -type f | sed -e "s|$src/||")
+
+            updateReferenceBranch.downloadFiles "$dst" "$download_dir"
+            git add -A
+            git commit -m 'update from reference repo' ||:
+            [ $DRY_RUN -ne 0 ] || git push ||:
+            popd > /dev/null
+        else
+            mv "$src" "$pdrDir/"
+        fi
+    done
+
+
+    term.log '\nDone processing submodules - finishing up\n' 'green'
+    git add -A
+    git commit -m 'update from reference repo' ||:
+    [ $DRY_RUN -ne 0 ] || git push
+    popd
+    return 0
+}
+
+#-----------------------------------------------------------------------------------------
+function updateReferenceBranch.versionArg()
+{
+    local file=${1:?}
+    local id=${2:?}
+
+    # exclude commented lines | find only lines with specified ['$id']= | extract value after '='
+    grep -vE '^\s*#' "$file" | \
+    grep "\['$id'\]=" | \
+    sed -E "s|\s+\['$id'\]=..(.+):.*|\1|"
+}
+
+#----------------------------------------------------------------------------------------------
+#
+#      MAIN
+#
+#----------------------------------------------------------------------------------------------
+
+declare -r start=$(date '+%s')
+declare -r PROGNAME="$( basename "${BASH_SOURCE[0]}" )"
+declare -r PROGRAM_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+
+
+declare -r loader="${PROGRAM_DIR}/appenv.bashlib"
+if [ ! -e "$loader" ]; then
+    echo 'Unable to load libraries'
+    exit 1
+fi
+source "$loader"
+appenv.loader 'updateReferenceBranch.main'
+
+
+declare -i status
+declare -a args=( $( updateReferenceBranch.cmdLineArgs "$@" ) ) && status=$? || status=$?
+[ $status -eq 0 ] && updateReferenceBranch.main "${args[@]:-}" && status=$? || status=$?
+printf '\nElapsed time: %s\n' $(timer.fmtElapsed $(( $(date '+%s') - start )) ) >&2
+exit $status
