@@ -40,3 +40,5 @@
    
 [init]
     defaultBranch = main
+[safe]
+	directory = /home/bobb/.inf

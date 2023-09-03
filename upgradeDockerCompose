@@ -1,13 +1,13 @@
 #!/usr/bin/bash
 
 
-declare VERSION=2.20.3
+DOCKER_COMPOSE_VER=2.21.0
 declare re='^\d+\.\d+\.\d+$'
 
  # if provided with 'all' parameter
 if [ "$#" -gt 0 ]; then
    if [[ "$1" =~ $re ]]; then
-     VERSION="$1"
+     DOCKER_COMPOSE_VER=2.21.02.21.0"$1"
 
    elif [ "$1" = 'all' ]; then
      declare cmd="$(readlink -f $(which "$0"))"
@@ -30,9 +30,9 @@ if [[ $EUID != 0 ]]; then
 fi
 
 # perform update
-declare download="/usr/local/bin/docker-compose.${VERSION}"
+declare download="/usr/local/bin/docker-compose.${DOCKER_COMPOSE_VER}"
 
-curl --silent --location https://github.com/docker/compose/releases/download/v${VERSION}/docker-compose-$(uname -s)-$(uname -m) -o "$download"
+curl --silent --location https://github.com/docker/compose/releases/download/v${DOCKER_COMPOSE_VER}/docker-compose-$(uname -s)-$(uname -m) -o "$download"
 [ "$?" -eq 0 ] || exit 1
 [ "$(stat -c %s "$download")" -gt 100 ] || exit 1
 
