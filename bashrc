@@ -137,3 +137,5 @@ complete -C /usr/local/bin/tk.v0.21.0 tk
 export PATH=${PATH}:/home/bobb/.bin:/home/bobb/.bin/utilities:/home/bobb/.bin/git:/home/bobb/.bin/test
 
 complete -C /usr/local/bin/tk.v0.23.0 tk
+
+complete -C /usr/local/bin/grr-linux-amd64.0.2.0 grr

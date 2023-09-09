@@ -49,12 +49,12 @@ function keep()
     declare message="${2:?}"
 
     # merge content into specified commit of current branch
-    if [ "$(git rev-parse --abbrev-ref HEAD)" = "$REF" ] || [ "$(git rev-parse HEAD)" == "$(git ls-remote --heads --quiet | grep "$REF" | cut -d ' ' -f 1)" ]; then
-        run "git add -A"
+    if [ "$(git rev-parse --abbrev-ref HEAD)" = "$REF" ] || [ "$(git rev-parse HEAD)" = "$(git ls-remote --heads --quiet | grep "$REF" | awk '{print $1}')" ]; then
+        run 'git add -A'
+    else
+        run 'git add -A'
         run "git commit -m ':git keep: $(date)'"
         run "git reset --soft $commit"
-    else
-        run "git add -A"
     fi
     run "git commit -m '$message'"
     run "git push -f"
