@@ -1,13 +1,13 @@
 #!/usr/bin/bash
 
 
-DOCKER_COMPOSE_VER=2.21.0
+DOCKER_COMPOSE_VER=2.22.0
 declare re='^\d+\.\d+\.\d+$'
 
  # if provided with 'all' parameter
 if [ "$#" -gt 0 ]; then
    if [[ "$1" =~ $re ]]; then
-     DOCKER_COMPOSE_VER=2.21.02.21.0"$1"
+     DOCKER_COMPOSE_VER="$1"
 
    elif [ "$1" = 'all' ]; then
      declare cmd="$(readlink -f $(which "$0"))"
