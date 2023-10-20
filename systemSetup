@@ -3,7 +3,7 @@
 # need to include changes to
 #    /etc/dhcp/dhclient.conf
 
-DOCKER_COMPOSE_VER=2.22.0
+DOCKER_COMPOSE_VER=2.23.0
 GIT_CRYPT_VER=0.7.0
 
 #----------------------------------------------------------------------------
@@ -24,7 +24,7 @@ function systemSetup.00_init() {
     [ "${myHOME:-}" ] || myHOME='/home/bobb'
     [ "${myUID:-}" ] || myUID='1026'
     [ "${myGID:-}" ] || myGID="$(getent group users | cut -d ':' -f 3)"
-    
+
     cd "${myHOME}"
     [ -d '.bin' ] || git clone --recursive https://github.com/ballab1/bin .bin
 
@@ -61,7 +61,7 @@ function systemSetup.00_init() {
 function systemSetup.01_addSudoers() {
 
     local target=/etc/sudoers.d/myOverrides
-    [ -f "$target" ] && return 0 
+    [ -f "$target" ] && return 0
 
     echo "Add user to $target"
     cat << EOF > "$target"
@@ -94,9 +94,9 @@ function systemSetup.02_requiredPackages() {
 function systemSetup.03_updateNetworkConfig() {
 
     # get our local interface name
-    local iface="$(ip -4 -j address show scope global dynamic|jq -r '.[0].addr_info[].label')"  
+    local iface="$(ip -4 -j address show scope global dynamic|jq -r '.[0].addr_info[].label')"
     local netCfg=$(grep -r "${iface}:" /etc/netplan/ | cut -d ':' -f 1)
-    
+
     cat << EOF > "$netCfg"
 # This is the network config written by 'subiquity'
 network:
@@ -213,16 +213,16 @@ function systemSetup.07_updateUsersAndGroups() {
     [ "$(getent group mysql)" ] || systemSetup.run groupadd --gid 909 mysql
 
     [ "$(getent group nginx)" ] || systemSetup.run groupadd --gid 1001 nginx
-    [ "$(getent passwd nginx)" ] || systemSetup.run useradd --no-create-home --gid 1001 --uid 1001 --shell /sbin/nologin nginx  
+    [ "$(getent passwd nginx)" ] || systemSetup.run useradd --no-create-home --gid 1001 --uid 1001 --shell /sbin/nologin nginx
 
     [ "$(getent group nagios)" ] || systemSetup.run groupadd --gid 1002 nagios
-    [ "$(getent passwd nagios)" ] || systemSetup.run useradd --no-create-home --gid 1002 --uid 1002 --shell /sbin/nologin nagios 
+    [ "$(getent passwd nagios)" ] || systemSetup.run useradd --no-create-home --gid 1002 --uid 1002 --shell /sbin/nologin nagios
 
     [ "$(getent group jenkins)" ] || systemSetup.run groupadd --gid 1003 jenkins
     [ "$(getent passwd jenkins)" ] || systemSetup.run useradd --no-create-home --gid 1003 --uid 1003 --shell /sbin/nologin jenkins
 
     [ "$(getent group webdav)" ] || systemSetup.run groupadd --gid 2222 webdav
-    [ "$(getent passwd webdav)" ] || systemSetup.run useradd --no-create-home --gid 2222 --uid 2222 --shell /sbin/nologin webdav 
+    [ "$(getent passwd webdav)" ] || systemSetup.run useradd --no-create-home --gid 2222 --uid 2222 --shell /sbin/nologin webdav
 
     [ "$(getent group docker)" ] || systemSetup.run groupadd --gid 117 docker
 
@@ -256,7 +256,7 @@ function systemSetup.10_installGitLFS() {
         echo 'need to run this from non-user'
         return 0
     fi
-    git lfs version &> /dev/null && return 0 
+    git lfs version &> /dev/null && return 0
 
     echo 'install Git-LFS support'
     curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash
@@ -301,7 +301,7 @@ function systemSetup.14_getGitRepos() {
             isDone=1
         fi
     done
-    [ $isDone -eq 0 ] && return 0 
+    [ $isDone -eq 0 ] && return 0
     if [[ -z "${myUID:-}" || -z "${myGID:-}" || -z "${myHOME:-}" ]]; then
         echo 'need to run this from non-user'
         return 0
@@ -377,7 +377,7 @@ function systemSetup.checkUser() {
 
 #----------------------------------------------------------------------------
 function systemSetup.doFunction() {
-    
+
     local -a functions
     mapfile -t functions < <(systemSetup.functions ||:)
 
@@ -493,7 +493,7 @@ function systemSetup.verifyPermisions() {
     local file="${2:?}"
 
     if [ "$(stat --format '%a %u:%g' "$file")" != "${perms} ${myUID}:$myGID" ]; then
-        echo -n "fixing '$file':: was $(stat --format '%A %U:%G' "$file")" 
+        echo -n "fixing '$file':: was $(stat --format '%A %U:%G' "$file")"
         sudo chown "${myUID}:$myGID" "$file"
         sudo chmod "$perms" "$file"
         echo "  is now $(stat --format '%A %U:%G' "$file")"
@@ -516,7 +516,7 @@ IFS=$'\n\t'
 
 declare -r USER_INFO_FILE=/tmp/userInfo
 declare -r PROGNAME="$(basename "${BASH_SOURCE[0]}")"
-declare -r PROGRAM_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" 
+declare -r PROGRAM_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
 declare -ri MAX_ROOT_FN=11
 
 if [ $# -eq 0 ] || [[ "${1,,}" = *help ]] || [[ "${1,,}" = *usage ]]; then
