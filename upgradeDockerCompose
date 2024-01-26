@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 
 
-DOCKER_COMPOSE_VER=2.24.0
+DOCKER_COMPOSE_VER=2.24.3
 declare re='^\d+\.\d+\.\d+$'
 
  # if provided with 'all' parameter
