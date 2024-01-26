@@ -1,0 +1,9 @@
+#!/bin/bash -x
+
+declare -r TOOLS="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"  
+
+"${TOOLS}/memwatch" --output /emc/ballab1/Jenkins/memory.csv &
+"${TOOLS}/cpuwatch" --output /emc/ballab1/Jenkins/cpu.csv &
+"${TOOLS}/diskwatch" --output /emc/ballab1/Jenkins/disk.csv &
+"${TOOLS}/iopslocalwatch" --output /emc/ballab1/Jenkins/local_iops.csv &
+"${TOOLS}/iopsremotewatch" --output /emc/ballab1/Jenkins/remote_iops.csv &

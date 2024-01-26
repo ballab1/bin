@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -e
+
+export CFG_MONITOR_MEMORY_CMD=/emc/ballab1/bin/memwatch
+export CFG_MONITOR_CPU_CMD=/emc/ballab1/bin/cpuwatch
+export CFG_MONITOR_DISK_CMD=/emc/ballab1/bin/diskwatch
+
+cd /c4_working/GIT
+dev/ballab1/CTD-Datalake_buildmetrics/updateDB.sh -b ./xxx --dbhost 127.0.0.1 -s upc-nextunity-prop-mcs > log 2>&1

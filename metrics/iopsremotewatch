@@ -1,0 +1,158 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+
+our $VERSION     = 1.00;
+
+use Getopt::Long;
+use File::Basename;
+
+use constant {
+  MIN_DELAY => 3,
+  FIELDS => [ 'access',
+              'commit',
+              'create',
+              'fsinfo',
+              'fsstat',
+              'getattr',
+              'link',
+              'lookup',
+              'mkdir',
+              'null',
+              'pathconf',
+              'read',
+              'readdir',
+              'readdirplus',
+              'readlink',
+              'remove',
+              'rename',
+              'rmdir',
+              'setattr',
+              'symlink',
+              'total',
+              'write'      ]
+};
+
+my $delay = MIN_DELAY;
+my $output;
+my $lastValues;
+
+$| = 1;  # flush data to disk asap
+
+sub logMessage($) {
+  my $msg = shift;
+  my $pid = $$;
+  
+  my @tm = localtime();
+  open(FH, '>>', '/emc/ballab1/Jenkins/'.basename($0).'.'.$pid.'.log');
+  printf FH "%02d:%02d:%02d:%d %s\n", $tm[2], $tm[1], $tm[0], $pid, $msg;
+  close FH;
+}
+
+# check if there is a prior instance running. Exit if there is, because we only want one.
+sub checkNotRunning() {
+    my $command = 'ps -C '.basename($0).' -o "%c" --no-headers';
+    my @result;
+    chomp(@result = qx{$command 2>&1});
+
+    logMessage('should exit(0).')  if (@result > 1);
+    logMessage('should keep running.')  unless (@result > 1);
+    if (@result > 1) {
+       chomp(@result = qx{'ps -efwH' 2>&1});
+       logMessage($_) foreach (@result);
+       while (@result > 1) {
+          sleep(600);
+       }
+    }
+    logMessage($_) foreach (@result);
+}
+
+
+sub getHeaders($$) {
+    my $type = shift;
+    my $names = shift;
+    return $type . join(','.$type, @{ $names });
+}
+
+sub getLatestData {
+    my $command = 'sudo /usr/sbin/nfsstat -3l';
+    my @result = ($_ = qx{$command 2>&1}, $? >> 8);
+    die("FATAL:  '$command' failed with status $?\n") if ($result[1]);
+    return $result[0];
+}
+
+sub getRecognizedFields($$) {
+    my $mode = shift;
+    my $nfsstats = shift;
+
+    my @fields = ();
+    $lastValues->{$mode} = {};
+    foreach ( @{+FIELDS} ) {
+        my $field = $_;
+        if ( $nfsstats =~ /$mode\s+$field:\s+(\d+)\s*/ ) {
+           $lastValues->{$mode}->{$field} = $1;
+           push (@fields, $field);
+        }
+    }
+    return @fields;
+}
+
+sub iopfield($$$) {
+    my $mode = shift;
+    my $field = shift;
+    my $data = shift;
+
+    my $retVal = undef;
+    
+    if ( $data =~ /$mode\s+$field:\s+(\d+)\s*/ ) {
+       my $value = $1;
+       $retVal = ($value - $lastValues->{$mode}->{$field})     if (exists $lastValues->{$mode}->{$field});
+       $lastValues->{$mode}->{$field} = $value;
+    }
+    return $retVal;
+}
+
+
+#-----------------------------------------------------------------------
+#
+#   MAIN code
+#
+#-----------------------------------------------------------------------
+
+checkNotRunning();
+
+GetOptions(
+  'p|delay=i' => \$delay,
+  'o|output=s' => \$output,
+) or die "Invalid command line arguments";
+
+if ( $delay < MIN_DELAY ) { $delay = MIN_DELAY };
+
+
+# setup our output
+my $out_fh = \*STDOUT;
+if (defined $output) {
+    open $out_fh, '>', $output or die "Cannot open $output for writing: $!";
+    select $out_fh;
+}
+
+
+
+# determine what we are going to report
+my $hdrstats = getLatestData();
+my @srvr_fields = getRecognizedFields('server', $hdrstats);
+my @clnt_fields = getRecognizedFields('client', $hdrstats);
+print join(',', 'Time', getHeaders('s_',\@srvr_fields), getHeaders('c_',\@clnt_fields)) . "\n";
+
+
+while (1) {
+    my $date = time;
+    my $nfsstats = getLatestData();
+    my @data = ();
+    push @data, map { iopfield ('server', $_, $nfsstats) } @srvr_fields;
+    push @data, map { iopfield ('client', $_, $nfsstats) } @clnt_fields;
+    print join(',', $date, @data) . "\n";
+    sleep $delay;
+}

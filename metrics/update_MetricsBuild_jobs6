@@ -1,0 +1,11 @@
+#!/bin/bash
+
+declare -r PERFORM_UPDATE=${1:-'false'}
+declare -r JOBS_DEFINITION_FILE='/emc/ballab1/Downloads/jenkins/jobs3.txt'
+declare -r XML_PATH='//buildWrappers/hudson.plugins.build__timeout.BuildTimeoutWrapper'
+declare -r GIT_ARG='/emc/ballab1/Downloads/jenkins/buildwrapper.xml'
+declare -r ACCUREV_ARG='/emc/ballab1/Downloads/jenkins/buildwrapper.xml'
+
+# locate main script
+declare -r UPDATE_JOBS="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+. "${UPDATE_JOBS}/update_jobs"

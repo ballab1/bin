@@ -1,0 +1,11 @@
+#!/bin/bash
+
+declare -r PERFORM_UPDATE=${1:-'false'}
+declare -r JOBS_DEFINITION_FILE='/emc/ballab1/Downloads/jenkins/jobs2.txt'
+declare -r XML_PATH='//scm/branches/hudson.plugins.git.BranchSpec/name'
+declare -r GIT_ARG='*/integration'
+declare -r ACCUREV_ARG='*/integration'
+
+# locate main script
+declare -r UPDATE_JOBS="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+. "${UPDATE_JOBS}/update_jobs"

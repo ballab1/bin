@@ -1,0 +1,186 @@
+#!/bin/bash
+
+set -o errexit
+set -o errtrace
+set -e
+
+## only ever define READ-ONLY vars in global scope
+
+declare -r TOOLS="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )" 
+declare -r JENKINS_URL="http://svc_ctdciauto:78%5EGPgau%3FySW%23f%3Dx@ci-server-18.usd.lab.emc.com:8080"
+
+# global exceptions to above rule
+declare -i dying=0
+declare -i pipe_error=0
+
+#----------------------------------------------------------------------------
+# Exit on any error
+function catch_error() {
+  local err=$?
+  set +o xtrace
+  local code="${1:-1}"
+  echo "Error in ${BASH_SOURCE[1]}:${BASH_LINENO[0]}. '${BASH_COMMAND}' exited with status $err"
+  # Print out the stack trace described by $function_stack  
+  if [ ${#FUNCNAME[@]} -gt 2 ]
+  then
+    echo "Call tree:"
+    for ((i=1;i<${#FUNCNAME[@]}-1;i++))
+    do
+      echo " $i: ${BASH_SOURCE[$i+1]}:${BASH_LINENO[$i]} ${FUNCNAME[$i]}(...)"
+    done
+  fi
+  echo "ERROR: an unknown error occurred at $BASH_SOURCE:$BASH_LINENO" >&2
+  echo "Exiting with status ${code}"
+  exit "${code}"
+}
+
+#----------------------------------------------------------------------------
+# Detect when build is aborted
+function catch_int() {
+    die "${BASH_SOURCE[0]} has been aborted with SIGINT (Ctrl-C)"
+}
+
+#----------------------------------------------------------------------------
+# Exit on broken pipe
+function catch_pipe() {
+    pipe_error+=1
+    [[ $pipe_error -eq 1 ]] || return 0
+#    if ! ( echo "INFO: Testing stdout pipe" ); then
+#        if [[ $logfile_redirect -ne 0 && $logfile_out ]]; then
+#            exec >>"$logfile_out"
+#            ( echo "ERROR: ${BASH_SOURCE[0]} has been aborted with SIGPIPE (broken pipe)" ) || :
+#        fi
+#    fi
+#    if ! ( echo "INFO: Testing stderr pipe" >&2 ); then
+#        if [[ $logfile_redirect -ne 0 && $logfile_err ]]; then
+#            exec 2>>"$logfile_err"
+#            ( echo "ERROR: ${BASH_SOURCE[0]} has been aborted with SIGPIPE (broken pipe)" >&2 ) || :
+#        fi
+#    fi
+    [[ $dying -eq 0 ]] || return 0
+    die "${BASH_SOURCE[0]} has been aborted with SIGPIPE (broken pipe)"
+}
+
+#----------------------------------------------------------------------------
+# Exit 
+function die() {
+    local status=$?
+    [[ $status -ne 0 ]] || status=255
+    dying+=1
+
+    printf "%s\n" "FATAL ERROR" "$@" >&2
+    exit $status
+} 
+
+#----------------------------------------------------------------------------
+# modify Jenkins config.xml
+function editXML()
+{
+    local -r job=$1
+    local -r path=$2
+    local -r value=$3
+
+    local -r path_exists="$( xml sel -t -v "count($path)" "${job}.xml" )"
+    # passing a value does not handle XML snippets. (only text: even when '--type elem' is used or '--expr "${value}"' is used)
+    if [[ $path_exists -gt 0 ]]; then
+        xml ed --inplace --update "$path" --value "$value" "${job}.xml"
+    else
+        xml ed --inplace --subnode "$( dirname "${path}" )" --type text -n "$( basename "${path}" )" --value "$value" "${job}.xml"
+    fi
+}
+
+#----------------------------------------------------------------------------
+# RLL encoding
+function encode()
+{
+    local _length="${#1}"
+    for (( _offset = 0 ; _offset < _length ; _offset++ )); do
+        _print_offset="${1:_offset:1}"
+        case "${_print_offset}" in
+            [a-zA-Z0-9.~_-]) printf "${_print_offset}" ;;
+            ' ') printf + ;;
+            *) printf '%%%X' "'${_print_offset}" ;;
+        esac
+    done
+}
+
+#----------------------------------------------------------------------------
+# get the new content to be inserted into Jenkins config.xml
+function getReplacement()
+{
+    local -r job=$1
+    local -r path=$2
+    local -r value=$3
+
+    if [[ -e "$value" ]]; then
+      cat "$value"
+    elif [[ "$value" == 's/'*'/' ]]; then
+      xml sel -t -v "$path" "${job}.xml" | sed -e "$value"
+    else
+      echo "$value"
+    fi
+}
+
+#----------------------------------------------------------------------------
+# request job config.xml from Jenkins
+function getXML()
+{
+    local -r job=$1
+    local -r remote="${JENKINS_URL}/job/$( urlencode "${job}" )/config.xml"
+    
+    curl -X GET "$remote" -s -o "${job}.xml"
+}
+
+#----------------------------------------------------------------------------
+# list the jobs that we are interested in. 
+# default to Harrier/Merlin metrics jobs if nothing valid given
+function listJobs()
+{
+   local -r file=$1
+   local -a contents
+   
+   if [[ -n "$file"  &&  -e "$file" ]]; then
+#     mapfile -t contents < "$file"
+#     echo ${contents}
+      cat "$file"
+   else
+     (curl -X GET "${JENKINS_URL}/api/json" 2> /dev/null | jq '.jobs[] | .name | select(test("^(Merlin|Harrier)_.*_builds"))' | sed  -e 's/^"//' -e 's/"$//' )
+   fi
+}
+
+#----------------------------------------------------------------------------
+# update job config.xml on Jenkins
+function putXML()
+{
+    local -r job=$1
+    local -r remote="${JENKINS_URL}/job/$( urlencode "${job}" )/config.xml"
+    
+    curl -X POST "$remote" -s --data-binary "@${job}.xml"
+}
+
+#----------------------------------------------------------------------------
+# name decoding for 'curl'
+function urldecode()
+{
+    local url_encoded="${1//+/ }"
+    printf '%b' "${url_encoded//%/\\x}"
+}
+
+#----------------------------------------------------------------------------
+# name decoding for 'curl'
+function urlencode()
+{
+    local -r old_lc_collate=$LC_COLLATE
+    LC_COLLATE=C
+    
+    local length="${#1}"
+    for (( i = 0; i < length; i++ )); do
+        local c="${1:i:1}"
+        case $c in
+            [a-zA-Z0-9.~_-]) printf "$c" ;;
+            *) printf '%%%02X' "'$c" ;;
+        esac
+    done
+    
+    LC_COLLATE=$old_lc_collate
+}

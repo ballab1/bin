@@ -1,0 +1,87 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use Getopt::Long;
+use File::Basename;
+use Cwd;
+use integer;
+require 'sys/syscall.ph';
+
+my $delay = 3;
+my $output;
+my $path = cwd;
+
+
+$| = 1;  # flush data to disk asap
+
+sub logMessage($) {
+  my $msg = shift;
+  my $pid = $$;
+  
+  my @tm = localtime();
+  open(FH, '>>', '/emc/ballab1/Jenkins/'.basename($0).'.'.$pid.'.log');
+  printf FH "%02d:%02d:%02d:%d %s\n", $tm[2], $tm[1], $tm[0], $pid, $msg;
+  close FH;
+}
+
+# check if there is a prior instance running. Exit if there is, because we only want one.
+sub checkNotRunning() {
+    my $command = 'ps -C '.basename($0).' -o "%c" --no-headers';
+    my @result;
+    chomp(@result = qx{$command 2>&1});
+
+    logMessage('should exit(0).')  if (@result > 1);
+    logMessage('should keep running.')  unless (@result > 1);
+    if (@result > 1) {
+       chomp(@result = qx{'ps -efwH' 2>&1});
+       logMessage($_) foreach (@result);
+       while (@result > 1) {
+          sleep(600);
+       }
+    }
+    logMessage($_) foreach (@result);
+}
+
+
+sub disk_space($) {
+    my $path = shift;
+    my $fmt = '\0' x 512;
+    my $res = syscall(&SYS_statfs, $path, $fmt);
+    die "Failed statfs on $path: $res" unless $res == 0;
+    my ($type, $bsize, $blocks, $bfree, $bavail, $files, $ffree) = unpack "Q7", $fmt;
+    return (($blocks - $bfree) * $bsize);
+}
+
+
+#-----------------------------------------------------------------------
+#
+#   MAIN code
+#
+#-----------------------------------------------------------------------
+
+checkNotRunning();
+
+GetOptions(
+  'p|delay=i' => \$delay,
+  'o|output=s' => \$output,
+) or die "Invalid command line arguments";
+
+my @fields = qw(
+    BytesFree
+);
+
+my $out_fh = \*STDOUT;
+if (defined $output) {
+    open $out_fh, '>', $output or die "Cannot open $output for writing: $!";
+    select $out_fh;
+}
+
+print join(',', 'Time', @fields) . "\n";
+while (1) {
+    my $date = time;
+    my @data = (disk_space($path));
+    print join(',', $date, @data) . "\n";
+    sleep $delay;
+}
