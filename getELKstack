@@ -8,10 +8,10 @@ function getImage()
     local -r registry_server=${REGISTRY_SERVER:-s2.ubuntu.home:5000}
 
     [ "$(docker image ls -q $image)" ] || docker pull "$image"
-    docker tag "$image" "${registry_server}/thirdparty/${image##*/}"
+    docker tag "$image" "${registry_server}/${image##*/}"
     docker rmi "$image"
-    docker push "${registry_server}/thirdparty/${image##*/}"
-    docker rmi "${registry_server}/thirdparty/${image##*/}"
+    docker push "${registry_server}/${image##*/}"
+    docker rmi "${registry_server}/${image##*/}"
 }
 
 getImage docker.elastic.co/beats/auditbeat:$version
