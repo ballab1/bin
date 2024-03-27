@@ -113,13 +113,17 @@ if ! shopt -oq posix; then
   elif [ -f /etc/bash_completion ]; then
     . /etc/bash_completion
   fi
+  [ -f /usr/local/bin/tk.v0.21.0 ] && complete -C /usr/local/bin/tk.v0.23.0 tk
+  [ -f /usr/local/bin/grr-linux-amd64.0.2.0 ] && complete -C /usr/local/bin/grr-linux-amd64.0.2.0 grr
 fi
 
 [ -f ~/.bin/bashlib ] && source ~/.bin/bashlib
 [ -f ~/.bin/git-prompt.sh ] && source ~/.bin/git-prompt.sh
 [ -f ~/.inf/docker.inf ] && source ~/.inf/docker.inf
 [ -f ~/.bin/bash_variables ] && source ~/.bin/bash_variables
-[ "$(snap list | grep -c 'microk8s')" -gt 0 ] && source <(microk8s.kubectl completion bash)
+if [ "$(which snap &>/dev/null)" ]; then
+    [ "$(snap list | grep -c 'microk8s')" -gt 0 ] && source <(microk8s.kubectl completion bash)
+fi
 if [ -f ~/.krew/bin/kubectl-krew ]; then
     [ -f ~/.bin/kubectl-krew ] && rm ~/.bin/kubectl-krew
     ln -s "$(readlink -f ~/.krew/bin/kubectl-krew)" ~/.bin/kubectl-krew
@@ -130,12 +134,7 @@ if [ -f ~/.krew/bin/kubectl-krew ]; then
     fi
     export PATH="${PATH}:${HOME}/.krew/bin"
 fi
-true
-
-complete -C /usr/local/bin/tk.v0.21.0 tk
 
 export PATH=${PATH}:/home/bobb/.bin:/home/bobb/.bin/utilities:/home/bobb/.bin/git:/home/bobb/.bin/test
 
-complete -C /usr/local/bin/tk.v0.23.0 tk
-
-complete -C /usr/local/bin/grr-linux-amd64.0.2.0 grr
+true
