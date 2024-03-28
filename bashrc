@@ -113,11 +113,9 @@ if ! shopt -oq posix; then
   elif [ -f /etc/bash_completion ]; then
     . /etc/bash_completion
   fi
+  [ -f /usr/local/bin/tk.v0.21.0 ] && complete -C /usr/local/bin/tk.v0.23.0 tk
+  [ -f /usr/local/bin/grr-linux-amd64.0.2.0 ] && complete -C /usr/local/bin/grr-linux-amd64.0.2.0 grr
 fi
-
-[ -f /usr/local/bin/tk.v0.21.0 ] && complete -C /usr/local/bin/tk.v0.21.0 tk
-[ -f /usr/local/bin/tk.v0.21.0 ] && complete -C /usr/local/bin/tk.v0.23.0 tk
-[ -f /usr/local/bin/grr-linux-amd64.0.2.0 ] && complete -C /usr/local/bin/grr-linux-amd64.0.2.0 grr
 
 [ -f ~/.bin/bashlib ] && source ~/.bin/bashlib
 [ -f ~/.bin/git-prompt.sh ] && source ~/.bin/git-prompt.sh
