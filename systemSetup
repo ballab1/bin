@@ -185,22 +185,30 @@ function systemSetup.06_setupRegistryAccess() {
 
     local daemonFile='/etc/docker/daemon.json'
     mkdir -p "$(dirname "$daemonFile")" ||:
-    if [ ! -f "$daemonFile" ]; then
-        echo "Updating $daemonFile"
-        echo '{ "insecure-registries":["s2.ubuntu.home:5000","ubuntu-s2.home:5000","10.3.1.9:5000"] }' > "${daemonFile}.tmp"
-
-    elif [ "$(jq 'has("insecure-registries")' "$daemonFile")" != 'true' ]; then
-        echo "Updating $daemonFile"
-        jq '. + { "insecure-registries":["s2.ubuntu.home:5000","ubuntu-s2.home:5000","10.3.1.9:5000"] }' "$daemonFile" > "${daemonFile}.tmp"
-
-    elif [ "$(jq '."insecure-registries"[]|contains( "\"s2.ubuntu.home:5000\",\"ubuntu-s2.home:5000\",\"10.3.1.9:5000\"" )' "$daemonFile")" != 'true' ]; then
-        echo "Updating $daemonFile"
-        jq '."insecure-registries"=(."insecure-registries"+["s2.ubuntu.home:5000","ubuntu-s2.home:5000","10.3.1.9:5000"]|unique)' "$daemonFile" > "${daemonFile}.tmp"
-
-    else
-        return 0
-    fi
+    [ -f "$daemonFile" ] && rm "$daemonFile"
+    cat << EOF > "${daemonFile}.tmp"
+{
+  "insecure-registries": [
+    "s2.ubuntu.home:5000",
+    "10.3.1.9:5000",
+    "[2601:189:4000:1126:207:e9ff:febd:4fa]:5000",
+    "ubuntu-s2.home:5000"
+  ],
+  "features": {
+    "buildkit": true
+  },
+  "log-driver": "json-file",
+  "log-level": "error",
+  "log-opts": {
+    "max-file": "3",
+    "max-size": "10m"
+  },
+  "storage-driver": "overlay2"
+}
+EOF
     jq '.' "${daemonFile}.tmp" > "$daemonFile"
+    chown root:root "$daemonFile"
+    chmod 644 "$daemonFile"
     systemctl restart docker
 }
 
