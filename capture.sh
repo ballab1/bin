@@ -11,7 +11,8 @@ rm_file() {
 
 start_tcpdump() {
     IFACE="$(ip -4 -j address show scope global dynamic|jq -r '.[0].addr_info[].label')"
-    sudo tcpdump -w "$DUMP_FILE" -i "$IFACE" &
+    [ -f 'sysfile.log' ] && sudo rm sysfile.log 
+    sudo SSLKEYLOGFILE=./keyfile.log tcpdump -w "$DUMP_FILE" -i "$IFACE" &
 }
 
 DUMP_FILE=~/wireshark/tcp.dump
