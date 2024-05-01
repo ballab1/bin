@@ -5,22 +5,18 @@
 #
 #############################################################################
 
+declare this="$(readlink -f "$0")"
+
  # if provided with 'all' parameter
 if [ "$#" -gt 0 ] && [ "$1" = 'all' ]; then
-     declare cmd="$(readlink -f $(which "$0"))"
-     for h in s{1..8};do
-       echo
-       echo "$h.ubuntu.home"
-#       ssh "$h.ubuntu.home" "$cmd"
-       ssh -tt "$h.ubuntu.home" '/home/bobb/.bin/keptBack.packages' < /dev/tty
-     done
+     all asroot "$this"
      exit
 fi
 
 
 # ensure this script is run as root
 if [[ $EUID != 0 ]]; then
-  sudo --preserve-env "$0" "$@"
+  sudo --preserve-env "$this" "$@"
   exit
 fi
 
@@ -29,8 +25,8 @@ apt update
 declare -a keptBack
 mapfile -t keptBack < <(apt list --upgradable 2>/dev/null|cut -d "/" -f 1|sed -e '1d')
 if [  "${#keptBack[*]}" -ge 0 ]; then
-    sudo apt update
-    sudo apt install ${keptBack[@]}
+    apt upgrade -y
+    apt install ${keptBack[@]}
 else
     echo 'Nothing to do'
 fi
