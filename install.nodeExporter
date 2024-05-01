@@ -1,26 +1,28 @@
 #!/bin/bash -x
 
-#---------------------------------------------------------------------------------------------- 
+#----------------------------------------------------------------------------------------------
 function downloadExporter() {
 
     local NODE_MACHINE="$(getMachine)"
     local NODE_EXPORTER_VER="node_exporter-${NODE_EXPORTER_VERSION}.linux-${NODE_MACHINE}"
+    local NODE_EXPORTER_BIN="/usr/local/bin/node_exporter.${NODE_EXPORTER_VERSION}"
 
     cd /tmp
     wget "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/${NODE_EXPORTER_VER}.tar.gz"
     tar xzf "${NODE_EXPORTER_VER}.tar.gz"
     cd "${NODE_EXPORTER_VER}"
-    mv node_exporter "/usr/local/bin/${NODE_EXPORTER_VER}"
-    chown root:root "/usr/local/bin/${NODE_EXPORTER_VER}"
+    mv node_exporter "$NODE_EXPORTER_BIN"
+    chown root:root "$NODE_EXPORTER_BIN"
     [ -f "$NODE_EXPORTER" ] && rm "$NODE_EXPORTER"
-    ln -s "/usr/local/bin/${NODE_EXPORTER_VER}" "$NODE_EXPORTER"
+    ln -s "$NODE_EXPORTER_BIN" "$NODE_EXPORTER"
     cd ..
     rm -rf "${NODE_EXPORTER_VER}"*
 }
 
-#---------------------------------------------------------------------------------------------- 
+#----------------------------------------------------------------------------------------------
 function getMachine() {
     case $(uname -m) in
+      aarch)    echo 'armv7';;
       armv7l)   echo 'armv7';;
       x86_64)   echo 'amd64';;
       i686)     echo '386';;
@@ -28,7 +30,7 @@ function getMachine() {
     return 0
 }
 
-#---------------------------------------------------------------------------------------------- 
+#----------------------------------------------------------------------------------------------
 function init_d() {
 cat << EOF
 #!/bin/bash
@@ -97,7 +99,7 @@ exit \$RETVAL
 EOF
 }
 
-#---------------------------------------------------------------------------------------------- 
+#----------------------------------------------------------------------------------------------
 function openbsd() {
 cat << 'EOF'
 #!/bin/ksh
@@ -114,7 +116,7 @@ rc_cmd $1
 EOF
 }
 
-#---------------------------------------------------------------------------------------------- 
+#----------------------------------------------------------------------------------------------
 function openwrt() {
 cat << EOF
 #!/bin/sh /etc/rc.common
@@ -133,7 +135,7 @@ start_service() {
 EOF
 }
 
-#---------------------------------------------------------------------------------------------- 
+#----------------------------------------------------------------------------------------------
 function node_exporter.service() {
 cat << EOF
 [Unit]
@@ -149,7 +151,7 @@ WantedBy=multi-user.target
 EOF
 }
 
-#---------------------------------------------------------------------------------------------- 
+#----------------------------------------------------------------------------------------------
 function node_exporter.options() {
 cat << 'EOF'
 OTIONS="--collector.textfile.directory /var/lib/node_exporter/textfile_collector \
@@ -163,17 +165,17 @@ OTIONS="--collector.textfile.directory /var/lib/node_exporter/textfile_collector
 EOF
 }
 
-#---------------------------------------------------------------------------------------------- 
+#----------------------------------------------------------------------------------------------
 function setup.textfile_collector() {
 
     local -r dir="${1:?}"
-    mkdir -p "$dir" ||: 
+    mkdir -p "$dir" ||:
     addgroup --gid 65533 node_exporter
     adduser --home /nonexistent --shell /sbin/nologin --no-create-home --uid 65533 --gid 65533 --disabled-password --quiet node_exporter
     chown 65533:65533 "$dir"
 }
 
-#---------------------------------------------------------------------------------------------- 
+#----------------------------------------------------------------------------------------------
 function install.node_exporter() {
 
     [ -f "$NODE_EXPORTER" ] && rm "$NODE_EXPORTER"
@@ -200,7 +202,7 @@ function install.node_exporter() {
     esac
 }
 
-#---------------------------------------------------------------------------------------------- 
+#----------------------------------------------------------------------------------------------
 
 # ensure this script is run as root
 if [[ $EUID != 0 ]]; then
@@ -208,7 +210,7 @@ if [[ $EUID != 0 ]]; then
   exit
 fi
 
-export NODE_EXPORTER_VERSION='1.4.0'
-export NODE_EXPORTER='/usr/sbin/node_exporter'
+export NODE_EXPORTER_VERSION='1.8.0'
+export NODE_EXPORTER='/usr/bin/node_exporter'
 
 install.node_exporter

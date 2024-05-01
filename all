@@ -1,0 +1,25 @@
+#!/usr/bin/bash
+
+# run command on all systems
+
+declare cmd
+
+if [ "$#" -eq 0 ]; then
+    echo 'this script will execute a command on all systems'
+elif [ "$1" = 'asroot' ]; then
+   cmd="$(dirname "$(readlink -f "$0")")/asroot"
+   shift
+fi
+
+# iterate over all systems
+for h in pi s{1..8};do
+    printf '\n\e[95m%s:\e[0m\n' "$h.ubuntu.home"
+    if [ "$cmd" ]; then
+        # shellcheck disable=SC2029
+        ssh "$h.ubuntu.home" "$cmd" "$@"
+    else
+        # shellcheck disable=SC2029
+        ssh "$h.ubuntu.home" "$@"
+    fi
+done
+echo

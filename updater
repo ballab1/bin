@@ -1,0 +1,187 @@
+#!/usr/bin/bash
+
+#----------------------------------------------------------------------------
+function allApps() {
+    local -r req="${1:-}"
+
+    local app hw remote version jq_cmd
+    local -i i="$(jq -r 'length' <<< "$APPS")"
+    until [ "$(( i-- ))" -eq 0 ]; do
+        jq_cmd="$(printf '.[%s]|"app=!\(.app)! version=!\(.version)! hw=!\(.hw)! compressed=!\(.compressed)! remote=!\(.remote)!"' "$i")"
+        eval "$(jq -r "$jq_cmd" <<< "$APPS" | sed "s|!|'|g")"
+        [ "${req:-$app}" = "${app}" ] || continue
+        installApp "$app" "$version" "$compressed" "$hw" "$remote"
+    done
+}
+
+#----------------------------------------------------------------------------
+function cleanupApp() {
+    local -r app="${1:?}"
+
+    local -a files
+    mapfile -t files < <(find /usr/local/bin -name "${app}*")
+    [ "${#files[*]}" -eq 0 ] && return 0
+
+    # shellcheck disable=SC2012
+    while read -r f; do
+        rm "$f"
+        echo "deleted $f"
+    done < <(ls -nt "/usr/local/bin/${app}"* |  awk '{if (NR > '"$NUMBER_OF_FILES"') {print $9}}')
+}
+
+#----------------------------------------------------------------------------
+function getArch() {
+    case "$HW" in
+        x86_64)  echo 'amd64';;   # all ubuntu
+        i686)    echo '386';;     # s2
+        aarch64) echo 'armv7';;   # pi  (may also be arm7 or arm)
+        armv7l)  echo 'armv7';;   # nas & nas2
+        *)       return 1;;
+    esac
+    return 0;
+}
+
+#----------------------------------------------------------------------------
+function installApp() {
+    local -r app="${1:?}"
+    local -r version="${2:?}"
+    local -r compressed="${3:?}"
+    local hw="${4:?}"
+    local remote="${5:?}"
+
+    # do not run on pi or s2
+    [ "$hw" = 'all' ] && hw="$HW"
+    [[ "$HW" =~ $hw ]] || return 0
+
+    # download update
+    local target="/usr/local/bin/${app}.${version}"
+    local app_link="/usr/bin/${app}"
+    local -i valid_target
+    if [ ! -h "$app_link" ]; then
+        valid_target=1
+    else
+        test "$(stat '--format=%N' "$app_link")" = "$(printf "'%s' -> '%s'" "$app_link" "$target")" && valid_target=$? || valid_target=$?
+    fi
+
+    if [ ! -e "$target" ] || [ "$valid_target" -ne 0 ]; then
+        local tmp_target="${TMP_DIR}/${app}.${version}"
+        remote="$(eval "echo $remote")"
+        printf '\e[90mcurl --location %s -o %s\e[0m\n' "$remote" "$target"
+        curl --silent --location "$remote" -o "$tmp_target"
+        # shellcheck disable=SC2181
+        [ "$?" -eq 0 ] || exit 1
+        if [[ "$(stat '--format=%s' "$tmp_target")" -eq 9  &&  "$(< "$tmp_target")" = 'Not Found' ]]; then
+            printf 'Remote file not found: %s\n' "$remote"
+            return 1
+        fi
+        if [ "$compressed" = 'true' ]; then
+            local new_target="$(unpack "$app" "$tmp_target" "${remote##*.}")"
+            if [ -z "${new_target:-}" ]; then
+                printf 'Remote file not found: %s\n' "$remote"
+                return 1
+            fi
+            tmp_target="$new_target"
+        fi
+
+        # ensure target is valid
+        if ! cmp --quiet "$tmp_target" "$target" ; then
+            printf '\e[90mchown 'root:root' %s\e[0m\n' "$target"
+            chown 'root:root' "$tmp_target"
+            printf '\e[90mchmod 755 %s\e[0m\n' "$target"
+            chmod 755 "$tmp_target"
+            mv "$tmp_target" "$target"
+        fi
+
+        # ensure symlink is valid
+        if [ "$(stat '--format=%N' "$app_link")" != "$(printf "'%s' -> '%s'" "$app_link" "$target")" ]; then
+            # create/update symlink
+            if [[ -h "$app_link" ]] || [[ -e "$app_link" ]]; then
+                printf '\e[90mrm %s\e[0m\n' "$app_link"
+                rm "$app_link"
+            fi
+            printf '\e[90mln -s %s %s\e[0m\n' "$target" "$app_link"
+            ln -s "$target" "$app_link"
+        fi
+    fi
+    
+    # remove old versions
+    cleanupApp "$app"
+}
+
+#----------------------------------------------------------------------------
+function onExit() {
+    local status=$?
+
+    set +o errexit
+    set +o nounset
+    trap - EXIT
+    trap - ERR
+    trap - INT
+    trap - PIPE
+    # remove our temp stuff
+    [ "${TMP_DIR:-}" ] && [ "${TMP_DIR:-}" != '/' ] && [ -e "${TMP_DIR:-}" ] && rm -rf "${TMP_DIR:-}"
+
+    return "$status"
+}
+
+#----------------------------------------------------------------------------
+function unpack() {
+    local -r app="${1:?}"
+    local -r target="${2:?}"
+    local -r ext="${3:?}"
+
+    local file fn
+    case "${ext,,}" in
+      gz|tz|tgz)  fn='unpack_tgz';;
+      zip)        fn='unpack_zip';;
+      tar)        fn='unpack_tar';;
+      *) echo "unknown extension for packed file: $target" >&2; return 1;;
+    esac
+
+    cd "$TMP_DIR"
+    "$fn" "$target"
+
+    while read -r file; do
+        readlink -f "$file"
+        return 0
+    done < <(find "$app"* -mindepth 1 -maxdepth 1 -name "$app" -type f)
+}
+
+#----------------------------------------------------------------------------
+function unpack_tgz() {
+    tar xzf "${1:?}"
+}
+
+#----------------------------------------------------------------------------
+function unpack_zip() {
+    unzip "${1:?}"
+}
+
+#----------------------------------------------------------------------------
+function unpack_tar() {
+    tar xf "${1:?}"
+}
+
+#----------------------------------------------------------------------------
+declare HW="$(uname -m)"
+declare OS="$(uname -s)";OS="${OS,,}"
+# shellcheck disable=SC2034
+declare ARCH="$(getArch)" || exit
+declare TMP_DIR="$(mktemp -d)"
+# shellcheck disable=SC2034
+declare -i NUMBER_OF_FILES=5
+#declare re='^\d+\.\d+\.\d+$'
+
+trap onExit EXIT
+
+#shellcheck disable=SC2016
+declare APPS='[ { "app": "docker-compose", "version": "2.27.0",  "hw": "x86_64", "compressed": "false", "comment":"# NA",     "remote": "https://github.com/docker/compose/releases/download/v${version}/docker-compose-${OS}-${HW}" },                                         
+                { "app": "docker-scout",   "version": "1.7.0",   "hw": "x86_64", "compressed": "true",  "comment":"# NA",     "remote": "https://github.com/docker/scout-cli/releases/download/v${version}/docker-scout_${version}_${OS}_${ARCH}.tar.gz" },                     
+                { "app": "git-crypt",      "version": "0.7.0",   "hw": "all",    "compressed": "false", "comment":"# custom", "remote": "https://github.com/AGWA/git-crypt/releases/download/${version}/git-crypt-${version}-${OS}-${HW}" },                                    
+                { "app": "node_exporter",  "version": "1.8.0",   "hw": "all",    "compressed": "true",  "comment":"# arm7",   "remote": "https://github.com/prometheus/node_exporter/releases/download/v${version}/node_exporter-${version}.${OS}-${ARCH}.tar.gz" },            
+                { "app": "grr",            "version": "0.4.1",   "hw": "x86_64", "compressed": "false", "comment":"# arm",    "remote": "https://github.com/grafana/grizzly/releases/download/v${version}/grr-${OS}-${ARCH}" },                                                 
+                { "app": "jb",             "version": "0.5.1",   "hw": "x86_64", "compressed": "false", "comment":"# arm",    "remote": "https://github.com/jsonnet-bundler/jsonnet-bundler/releases/download/v${version}/jb-${OS}-${ARCH}" },                                  
+                { "app": "tk",             "version": "0.26.0",  "hw": "x86_64", "compressed": "false", "comment":"# arm",    "remote": "https://github.com/grafana/tanka/releases/download/v${version}/tk-${OS}-${ARCH}" }                                                     
+               ]'
+
+allApps "$@"
