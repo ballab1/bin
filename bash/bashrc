@@ -117,10 +117,12 @@ if ! shopt -oq posix; then
   [ -f /usr/local/bin/grr-linux-amd64.0.2.0 ] && complete -C /usr/local/bin/grr-linux-amd64.0.2.0 grr
 fi
 
-[ -f ~/.bin/bashlib ] && source ~/.bin/bashlib
+
+[ -f ~/.bin/bash/bashlib ] && source ~/.bin/bash/bashlib
+[ -f ~/.bin/bash/bash_variables ] && source ~/.bin/bash/bash_variables
 [ -f ~/.bin/git-prompt.sh ] && source ~/.bin/git-prompt.sh
 [ -f ~/.inf/docker.inf ] && source ~/.inf/docker.inf
-[ -f ~/.bin/bash_variables ] && source ~/.bin/bash_variables
+
 if [ "$(which snap &>/dev/null)" ]; then
     [ "$(snap list | grep -c 'microk8s')" -gt 0 ] && source <(microk8s.kubectl completion bash)
 fi
@@ -135,6 +137,6 @@ if [ -f ~/.krew/bin/kubectl-krew ]; then
     export PATH="${PATH}:${HOME}/.krew/bin"
 fi
 
-export PATH=${PATH}:/home/bobb/.bin:/home/bobb/.bin/utilities:/home/bobb/.bin/git:/home/bobb/.bin/test
+export PATH=${PATH}:$HOME/.bin/utilities:$HOME/.bin/git:$HOME/.bin/test
 
 true

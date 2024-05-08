@@ -2,7 +2,7 @@
     name = Ballantyne, Bob
     email = ballantyne.robert@gmail.com
 [include]
-    path = /home/bobb/.enterprise/config.include
+    path = ~/.enterprise/config.include
 [credential]
     username = ballab1
     helper = cache --timeout=999999
@@ -41,4 +41,4 @@
 [init]
     defaultBranch = main
 [safe]
-	directory = /home/bobb/.inf
+    directory = ~/.inf

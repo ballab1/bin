@@ -16,10 +16,10 @@ for h in pi s{1..8};do
     printf '\n\e[95m%s:\e[0m\n' "$h.ubuntu.home"
     if [ "$cmd" ]; then
         # shellcheck disable=SC2029
-        ssh -tt "$h.ubuntu.home" "$cmd" "$@" < /dev/tty
+        ssh -tt "bobb@$h.ubuntu.home" "$cmd" "$@" < /dev/tty
     else
         # shellcheck disable=SC2029
-        ssh -tt "$h.ubuntu.home" "$@" < /dev/tty
+        ssh -tt "bobb@$h.ubuntu.home" "$@" < /dev/tty
     fi
 done
 echo
