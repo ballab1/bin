@@ -31,5 +31,5 @@ alias env='/usr/bin/env | sort'
 
 alias rlg='dockerRunLogs'
 alias tmux='/usr/bin/tmux -f ~/.tmux/tmux.conf'
-alias kc='microk8s.kubectl'
-alias kubectl='microk8s.kubectl'
+[ "$(which kubectl)" ] || alias kubectl='/snap/bin/kubectl'
+alias kc="$(which kubectl|sed 's: :\\ :g')"
