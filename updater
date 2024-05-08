@@ -90,10 +90,11 @@ function installApp() {
             printf '\e[90mchmod 755 %s\e[0m\n' "$target"
             chmod 755 "$tmp_target"
             mv "$tmp_target" "$target"
+            valid_target=1
         fi
 
         # ensure symlink is valid
-        if [ "$(stat '--format=%N' "$app_link")" != "$(printf "'%s' -> '%s'" "$app_link" "$target")" ]; then
+        if [ "$valid_target" -ne 0 ]; then
             # create/update symlink
             if [[ -h "$app_link" ]] || [[ -e "$app_link" ]]; then
                 printf '\e[90mrm %s\e[0m\n' "$app_link"
@@ -179,6 +180,7 @@ declare APPS='[ { "app": "docker-compose", "version": "2.27.0",  "hw": "x86_64",
                 { "app": "git-crypt",      "version": "0.7.0",   "hw": "all",    "compressed": "false", "comment":"# custom", "remote": "https://github.com/AGWA/git-crypt/releases/download/${version}/git-crypt-${version}-${OS}-${HW}" },                                    
                 { "app": "node_exporter",  "version": "1.8.0",   "hw": "all",    "compressed": "true",  "comment":"# arm7",   "remote": "https://github.com/prometheus/node_exporter/releases/download/v${version}/node_exporter-${version}.${OS}-${ARCH}.tar.gz" },            
                 { "app": "grr",            "version": "0.4.1",   "hw": "x86_64", "compressed": "false", "comment":"# arm",    "remote": "https://github.com/grafana/grizzly/releases/download/v${version}/grr-${OS}-${ARCH}" },                                                 
+                { "app": "jwt",            "version": "6.0.0",   "hw": "all",    "compressed": "true",  "comment":"# NA",     "remote": "https://github.com/mike-engel/jwt-cli/releases/download/${version}/jwt-${OS}.tar.gz" },                                  
                 { "app": "jb",             "version": "0.5.1",   "hw": "x86_64", "compressed": "false", "comment":"# arm",    "remote": "https://github.com/jsonnet-bundler/jsonnet-bundler/releases/download/v${version}/jb-${OS}-${ARCH}" },                                  
                 { "app": "tk",             "version": "0.26.0",  "hw": "x86_64", "compressed": "false", "comment":"# arm",    "remote": "https://github.com/grafana/tanka/releases/download/v${version}/tk-${OS}-${ARCH}" }                                                     
                ]'
