@@ -82,7 +82,7 @@ function systemSetup.02_requiredPackages() {
     apt-get update
     systemSetup.run apt install -y build-essential nfs-common nfs-kernel-server tasksel libxml2 libxml2-dev
     systemSetup.run apt install -y openjdk-17-jre-headless cifs-utils docker-compose jq gh xmlstarlet zip unzip
-    systemSetup.run apt install -y python3 python3-pip
+    systemSetup.run apt install -y python3 python3-pip python-is-python3
     systemSetup.run apt install -y libssl-dev librdkafka++1 librdkafka1 python3-confluent-kafka
     systemSetup.run apt install -y net-tools
 
@@ -144,40 +144,19 @@ function systemSetup.04_networkMounts() {
         printf '%s %s nfs rw,vers=4\n' "${mounts[$mnt]}" "${mnt}" >> "$target"
     done
     mount -a ||:
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.05_getLatestApps() {
+
+    "${PROGRAM_DIR}/updater"
+    pip3 install py-spy
 
     [ -d "${myHOME}/GIT/git-crypt" ] || return 0
     cd "${myHOME}/GIT/git-crypt"
     make install
     cd "${myHOME}/.bin/utilities"
     sudo --preserve-env --user bobb git-crypt unlock "${myHOME}/src/keys/work-stuff.key"
-}
-
-#----------------------------------------------------------------------------
-function systemSetup.05_getLatestApps() {
-
-    [ "$(uname -m)" = 'x86_64' ] || return 0
-
-    # shellcheck disable=SC2034
-    local -A DC=( ['file']="/usr/local/bin/docker-compose.$DOCKER_COMPOSE_VER"
-                  ['target']='/usr/bin/docker-compose'
-                  ['url']="https://github.com/docker/compose/releases/download/v${DOCKER_COMPOSE_VER}/docker-compose-$(uname -s)-$(uname -m)"
-                  ['version']="$DOCKER_COMPOSE_VER"
-                )
-    # shellcheck disable=SC2034
-    local -A GC=( ['file']="/usr/local/bin/git-crypt.$GIT_CRYPT_VER"
-                  ['target']='/usr/bin/git-crypt'
-                  ['url']="https://github.com/docker/compose/releases/download/v${DOCKER_COMPOSE_VER}/docker-compose-$(uname -s)-$(uname -m)"
-                  ['version']="$GIT_CRYPT_VER"
-                )
-
-
-    local -a targets=( "DC" )
-
-    local target
-    for target in "${targets[@]}";do
-        # shellcheck disable=SC1087
-        eval systemSetup.updateApp "\${$target['file']}" "\${$target['target']}" "\${$target['version']}" "\${$target['url']}"
-    done
 }
 
 #----------------------------------------------------------------------------
