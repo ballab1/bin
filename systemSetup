@@ -3,7 +3,7 @@
 # need to include changes to
 #    /etc/dhcp/dhclient.conf
 
-DOCKER_COMPOSE_VER=2.25.0
+DOCKER_COMPOSE_VER=2.27.0
 GIT_CRYPT_VER=0.7.0
 
 #----------------------------------------------------------------------------
