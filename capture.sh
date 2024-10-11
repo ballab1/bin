@@ -12,17 +12,20 @@ rm_file() {
 start_tcpdump() {
     IFACE="$(ip -4 -j address show scope global dynamic|jq -r '.[0].addr_info[].label')"
     [ -f 'sysfile.log' ] && sudo rm sysfile.log 
-    sudo SSLKEYLOGFILE=./keyfile.log tcpdump -w "$DUMP_FILE" -i "$IFACE" &
+    sudo SSLKEYLOGFILE=./keyfile.log tcpdump -w "$DUMP_FILE" -i "$IFACE" $@ &
 }
 
 DUMP_FILE=~/wireshark/tcp.dump
 DC_FILE=~/wireshark/docker-compose.yml
+MODE="${1:?'must specify an argument from start|stop|up|down'}"
+[ "$#" -gt 0 ] || exit 1
+shift
 
-case "${1:?'must specify an argument from start|stop|up|down'}" in
+case "$MODE" in
     start)
 	kill_tcpdump
 	rm_file
-	start_tcpdump
+	start_tcpdump "$@"
 	;;
     stop)
 	kill_tcpdump
@@ -33,5 +36,8 @@ case "${1:?'must specify an argument from start|stop|up|down'}" in
     down)
 	docker-compose -f "$DC_FILE" down
         ;;
+    *)
+	echo 'invalid argument: [start|stop|up|down]'
+	;;
 esac
 exit 0
