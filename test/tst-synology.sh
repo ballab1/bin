@@ -102,7 +102,7 @@ function run_test() {
   local NODE=''
   local -i COUNT=0
   while [ "${#NODE}" -eq 0 ];do
-    NODE="$(kubectl get pod -n postgres -o 'jsonpath={.items[0].spec.nodeName}')"
+    NODE="$(kubectl get pod -n postgres -o 'jsonpath={.items[0].spec.nodeName}' 2>/dev/null)"
     [ "${#NODE}" -gt 0 ] && break
     [ "$(( ++COUNT ))" -ge "$MAX_ITER" ] && break
     sleep 2
