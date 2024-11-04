@@ -121,6 +121,7 @@ fi
 [ -f ~/.bin/bash/bashlib ] && source ~/.bin/bash/bashlib
 [ -f ~/.bin/bash/bash_variables ] && source ~/.bin/bash/bash_variables
 [ -f ~/.bin/git-prompt.sh ] && source ~/.bin/git-prompt.sh
+[ -f ~/.bin/helm.completion ] && source ~/.bin/helm.completion
 [ -f ~/.inf/docker.inf ] && source ~/.inf/docker.inf
 
 if [ "$(which snap &>/dev/null)" ]; then
