@@ -11,6 +11,7 @@ declare -r HELM_VALUES='synology-helm-values.yml'
 declare -r TEST_DEFN_DIR='postgresql'
 declare -r PV_DEFINITION="$TEST_DEFN_DIR/40.PersistentVolume.yml"
 declare -r TEST_DEFN_NS='postgres'
+declare -r CONSOLE_OUT='console.log'
 declare -r RESULTS_FILE='results.log'
 declare -r ERRORS_FILE='errors.log'
 declare -i MAX_ITER=100
@@ -24,7 +25,8 @@ declare -a LOCATIONS=( 'K8S'
                        '10.3.1.4'
                        '//10.3.1.4'
                        '//10.3.1.4/K8S'
-                       '//10.3.1.4/volume1K8S'
+                       '//10.3.1.4/volume1'
+                       '//10.3.1.4/volume1/K8S'
                      )
 
 declare -a VARIABLES=( 'K8S K8S'
@@ -206,7 +208,8 @@ function node_time() {
     if [ "${#LINES}" -gt 20 ] && [ "$(wc -l <<< "$LINES")" -gt 0 ]; then
       # return time of last error found
       echo "$COUNT"
-      tail -1 <<< "$LINES" | cut -d ' ' -f 1
+      LINES="$(tail -1 <<< "$LINES")"
+      echo "$LINES" | cut -d ' ' -f 1
       printf '%s: %s\n' "$ID" "$LINES" >> "$ERRORS_FILE"
       return
     fi
@@ -278,7 +281,7 @@ function test() {
   done
 
   # configure PV & PVC to use our test parameters
-  [ "$(kubectl get namespace -o json | jq -r '[.items[]|select(.metadata.name == "'"$TEST_DEFN_NS"'")]|length')" -gt 0 ] && kubectl delete -f "$TEST_DEFN_DIR" > /dev/null
+  wait_for_namespace_delete
   kubectl create -f "$TEST_DEFN_DIR" > /dev/null
   yaml2json "$PV_DEFINITION" | jq -c '.spec.csi|{id:'"${ID}"', source: ."volumeAttributes".source, "volumeHandle"}' >&2
   run_test
@@ -309,7 +312,21 @@ function test_variables() {
 }
 
 # ---------------------------------------------------------------------------
+function  wait_for_namespace_delete() {
+
+  local json
+  while true ;do
+    json="$(kubectl get namespace -o json | jq -r '[.items[]|select(.metadata.name == "'"$TEST_DEFN_NS"'")]')"
+    [ "$(jq 'length' <<< "$json")" -eq 0 ] && break
+    if [ "$(jq -r '.[0].status.phase' <<< "$json")" = 'Active' ]; then
+      kubectl delete -f "$TEST_DEFN_DIR" > /dev/null
+    fi
+    sleep 2
+  done
+}
+
+# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 
 trap onExit EXIT
-main
+main | tee "$CONSOLE_OUT"

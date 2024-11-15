@@ -2,7 +2,7 @@
 
 
 #shellcheck disable=SC2016
-declare APPS='[ { "app": "docker-compose", "version": "2.30.1",  "hw": "x86_64", "compressed": "false", "comment":"# NA",     "remote": "https://github.com/docker/compose/releases/download/v${version}/docker-compose-${OS}-${HW}" },                                         
+declare APPS='[ { "app": "docker-compose", "version": "2.30.3",  "hw": "x86_64", "compressed": "false", "comment":"# NA",     "remote": "https://github.com/docker/compose/releases/download/v${version}/docker-compose-${OS}-${HW}" },                                         
                 { "app": "docker-scout",   "version": "1.15.0",  "hw": "x86_64", "compressed": "true",  "comment":"# NA",     "remote": "https://github.com/docker/scout-cli/releases/download/v${version}/docker-scout_${version}_${OS}_${ARCH}.tar.gz" },                     
                 { "app": "git-crypt",      "version": "0.7.0",   "hw": "all",    "compressed": "false", "comment":"# custom", "remote": "https://github.com/AGWA/git-crypt/releases/download/${version}/git-crypt-${version}-${OS}-${HW}" },                                    
                 { "app": "node_exporter",  "version": "1.8.2",   "hw": "all",    "compressed": "true",  "comment":"# arm7",   "remote": "https://github.com/prometheus/node_exporter/releases/download/v${version}/node_exporter-${version}.${OS}-${ARCH}.tar.gz" },            
