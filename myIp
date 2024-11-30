@@ -1,3 +1,4 @@
 #!/usr/bin/bash
 
-ip -4 -j address show scope global|jq -r '.[0].addr_info[].local'
+ip -4 -j address|jq -r '.[]|select(.qdisc == "fq_codel").addr_info[0].local'
+# ip -4 -j address show scope global|jq -r '.[0].addr_info[].local'
