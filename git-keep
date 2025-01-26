@@ -16,6 +16,7 @@ Usage:
                                  If not specified, HEAD~1 is used as basis, which causes HEAD to be overwritten 
         -m --message <message>   use <message> as the commit message
                                  If not specified, the commit message from HEAD is reused for new commit
+        -f --force               perform git-keep on '$REF' branch  (main)
            --history             show history of commitId's corResponding to 'git keep' 
 
 
@@ -45,18 +46,16 @@ function history()
 #---------------------------------------------------------------------------------------------- 
 function keep()
 {
-    declare commit="${1:?}"
-    declare message="${2:?}"
+    run 'git add -A'
 
     # merge content into specified commit of current branch
-    if [ "$(git rev-parse --abbrev-ref HEAD)" = "$REF" ] || [ "$(git rev-parse HEAD)" = "$(git ls-remote --heads --quiet | grep "$REF" | awk '{print $1}')" ]; then
-        run 'git add -A'
-    else
-        run 'git add -A'
+    if [ "${OPTS['main']}" = 1 ] || \
+       [ "$(git rev-parse --abbrev-ref HEAD)" != "$REF" ] || \
+       [ "$(git rev-parse HEAD)" != "$(git ls-remote --heads --quiet | grep "$REF" | awk '{print $1}')" ]; then
         run "git commit -m ':git keep: $(date)'"
-        run "git reset --soft $commit"
+        run "git reset --soft ${OPTS['commit']}"
     fi
-    run "git commit -m '$message'"
+    run "git commit -m '${OPTS['message']}'"
     run "git push -f"
 }
 
@@ -71,9 +70,9 @@ function run()
 function verify()
 {
     # do nothing when we are not in a GIT directory
-    ! git rev-parse --is-inside-work-tree >/dev/null && exit $?
+    (! git rev-parse --is-inside-work-tree > /dev/null) && exit $?
 
-    # do nothing when tree is clean 
+    # do nothing when tree is clean
     [ "$(git diff HEAD)" ] || [ "$(git status --porcelain)" ] || exit 0
 
     #[ $(git rev-parse --verify --quiet "origin/$REF" &> /dev/null ; echo $?) -eq 0 ] || exit 0
@@ -90,19 +89,20 @@ declare -r reset='\e[0m'
 declare -r PROGNAME="$( basename "${BASH_SOURCE[0]}" )" 
 declare -r DEBUG=${DEBUG:-1}    # set to 0 if you do not wish to see native 'git' commands
 
-declare -r options=$(getopt --longoptions "help,Help,HELP,commit:,history,message:" --options "Hhc:m:" --name "$PROGNAME" -- "$@") || usage
-eval set -- "$options"
-
-declare -A opts=()
+declare -A OPTS=(['main']=0)
 declare -i i=0
+declare -r options=$(getopt --longoptions "help,Help,HELP,commit:,force,history,message:" --options "Hhfc:m:" --name "$PROGNAME" -- "$@") || usage
+
+eval set -- "$options"
 while [ $# -gt 0 ]; do
     case "${1:-}" in
         -h|--h|--help|-help)  usage;;
         -H|--H|--HELP|-HELP)  usage;;
         --Help|-Help)         usage;;
-        -c|--c|--commit)      opts['commit']=$2; shift 2;;
+        -c|--c|--commit)      OPTS['commit']=$2; shift 2;;
                --history)     history;;
-        -m|--m|--message)     opts['commit']=$2; shift 2;;
+        -m|--m|--message)     OPTS['commit']=$2; shift 2;;
+        -f|--f|--force)       OPTS['main']=1; shift; break;;
         --)                   shift; break;;
     esac
 done 
@@ -112,8 +112,8 @@ declare -r REF=$(gitReferenceBranch)
 verify
 
 # default arguments when nothing specified
-[ -z "${opts['commit']:-}" ] && opts['commit']="$(git rev-parse HEAD~1)"
-[ -z "${opts['message']:-}" ] && opts['message']="$(git log -1 --format=%s)"
+[ -z "${OPTS['commit']:-}" ] && OPTS['commit']="$(git rev-parse HEAD~1)"
+[ -z "${OPTS['message']:-}" ] && OPTS['message']="$(git log -1 --format=%s)"
 
 # do our stuff
-keep "${opts['commit']}" "${opts['message']}"
+keep
