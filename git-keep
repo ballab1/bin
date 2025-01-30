@@ -16,8 +16,8 @@ Usage:
                                  If not specified, HEAD~1 is used as basis, which causes HEAD to be overwritten 
         -m --message <message>   use <message> as the commit message
                                  If not specified, the commit message from HEAD is reused for new commit
-        -f --force               perform git-keep on '$REF' branch  (main)
-           --history             show history of commitId's corResponding to 'git keep' 
+        -f --force               perform git-keep on reference branch  (main)
+           --history             show history of commitId's coresponding to 'git keep' 
 
 
 NOTE: this should only be used on developer branches. DO not use on a shared branch.
