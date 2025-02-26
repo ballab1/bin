@@ -40,7 +40,7 @@ Done
     systemSetup
 	Reading package lists... Done
 	apt-get install -y build-essential nfs-common nfs-kernel-server tasksel libxml2 libxml2-dev
-	apt-get install -y openjdk-8-jre-headless cifs-utils python
+	apt-get install -y openjdk-8-jre-headless cifs-utils python sqlite3
 	Extracting templates from packages: 100%
 	apt-get install -y librdkafka++1 librdkafka1 python-confluent-kafka
 	E: Unable to locate package python-confluent-kafka
