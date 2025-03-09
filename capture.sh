@@ -39,12 +39,17 @@ function main() {
             ;;
         up)
             docker-compose -f "$DC_FILE" up -d
+            ip="$(ip -4 -j address|jq -r '.[]|select(.qdisc != "noqueue").addr_info[0].local')"
+            echo "server available on http://${ip}:3000"
             ;;
         down)
             docker-compose -f "$DC_FILE" down
             ;;
+        status)
+            ps aux | grep -E 'tcpdump|wireshark' | grep -v grep
+            ;;
         *)
-            echo 'Invalid argument. Must specify an argument from : [start|stop|up|down]'
+            echo 'Invalid argument. Must specify an argument from : [start|stop|up|down|status]'
             exit 1
             ;;
     esac
@@ -72,17 +77,26 @@ function rm_file() {
 #-------------------------------------------------------------------------
 function start_tcpdump() {
 
-    #IFACE="$(ip -4 -j address|jq -r '.[]|select(.qdisc == "fq_codel").addr_info[0].label')"
-    #IFACE="$(ip -4 -j address show scope global dynamic|jq -r '.[0].addr_info[].label')"
-    local iface="$(ip -4 -j address|jq -r '.[]|select(.qdisc != "noqueue").addr_info[0].label')"
-
     [ -f 'sysfile.log' ] && sudo rm sysfile.log
-    # sudo SSLKEYLOGFILE="${WORKDIR}/keyfile.log" tcpdump -i $iface -w "$DUMP_FILE" -W 24 -G 3600 --relinquish-privileges=bobb $@ &
-    sudo SSLKEYLOGFILE="${WORKDIR}/keyfile.log" tcpdump -i $iface \
-                                                        -w "$DUMP_FILE" \
-                                                        -C "$FILE_SIZE" \
-                                                        -W "$MAX_FILES" \
-                                                        --relinquish-privileges="$USER" "$@" &
+
+    if [ "$1" = 'all' ]; then
+	shift
+        sudo SSLKEYLOGFILE="${WORKDIR}/keyfile.log" tcpdump -w "$DUMP_FILE" \
+                                                            -C "$FILE_SIZE" \
+                                                            -W "$MAX_FILES" \
+                                                            --relinquish-privileges="$USER" &
+    else
+        #IFACE="$(ip -4 -j address|jq -r '.[]|select(.qdisc == "fq_codel").addr_info[0].label')"
+        #IFACE="$(ip -4 -j address show scope global dynamic|jq -r '.[0].addr_info[].label')"
+        local iface="$(ip -4 -j address|jq -r '.[]|select(.qdisc != "noqueue").addr_info[0].label')"
+
+        # sudo SSLKEYLOGFILE="${WORKDIR}/keyfile.log" tcpdump -i $iface -w "$DUMP_FILE" -W 24 -G 3600 --relinquish-privileges=bobb $@ &
+        sudo SSLKEYLOGFILE="${WORKDIR}/keyfile.log" tcpdump -i $iface \
+                                                            -w "$DUMP_FILE" \
+                                                            -C "$FILE_SIZE" \
+                                                            -W "$MAX_FILES" \
+                                                            --relinquish-privileges="$USER" &
+    fi
 }
 
 #-------------------------------------------------------------------------
