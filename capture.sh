@@ -40,7 +40,7 @@ function main() {
         up)
             docker-compose -f "$DC_FILE" up -d
             ip="$(ip -4 -j address|jq -r '.[]|select(.qdisc != "noqueue").addr_info[0].local')"
-            echo "server available on http://${ip}:3000"
+            echo "server available on https://${ip}:3001"
             ;;
         down)
             docker-compose -f "$DC_FILE" down
