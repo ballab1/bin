@@ -42,3 +42,5 @@
     defaultBranch = main
 [safe]
     directory = ~/.inf
+	directory = /home/bobb/production/workspace.production/jenkins/jenkins_home/workspace
+	directory = /home/bobb/production/workspace.production/jenkins/jenkins_home/workspace/Update directories - secrets
