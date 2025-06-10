@@ -4,7 +4,7 @@ cd ~/production
 deploy down
 rm -rf workspace.production/.secrets
 cd ~/.inf/ssl
-tar cvzf ~/Downloads/certs.tgz *
+tar cvzf ~/GIT/Soho-Ball.certs/Soho-Ball_CA/certs.tgz *
 cd ~/GIT/support
 rm logs/*
 build.sh -f jenkins
