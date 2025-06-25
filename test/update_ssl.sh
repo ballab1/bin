@@ -13,7 +13,7 @@ sudo find /usr/local/share/ca-certificates/soho-ball/ -type f -delete
 sudo update-ca-certificates
 
 find ~/.inf/ssl -type f -delete
-find -mindepth 1 -maxdepth 1 ~/GIT/support/logs/ -type f -delete
+find ~/GIT/support/logs/ -mindepth 1 -maxdepth 1 -type f -delete
 find ~/production/workspace.production/.secrets -delete
 [ -f ~/Downloads/certs.tgz ] && rm ~/Downloads/certs.tgz
 
