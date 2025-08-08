@@ -9,7 +9,8 @@ fi
 while read -r f; do
     sudo rm "/etc/ssl/certs/$f"
 done < <(ls -l /etc/ssl/certs/ | grep 'Ball' | cut -d ' ' -f 13)
-sudo find /usr/local/share/ca-certificates/soho-ball/ -type f -delete
+[ -d /usr/local/share/ca-certificates/soho-ball ] && rm -rf /usr/local/share/ca-certificates/soho-ball
+sudo find /usr/local/share/ca-certificates/ -type f -delete
 sudo update-ca-certificates
 
 find ~/.inf/ssl -type f -delete
@@ -19,9 +20,9 @@ find ~/production/workspace.production/.secrets -delete
 
 cd ~/.inf/ssl
 tar xvzf ~/GIT/Soho-Ball.certs/Soho-Ball_CA/certs.tgz
-sudo cp SohoBall_CA.crt /usr/local/share/ca-certificates/soho-ball/
+sudo cp SohoBall_CA.crt /usr/local/share/ca-certificates/
 cp ~/GIT/Soho-Ball.certs/Soho-Ball_CA/certs.tgz ~/Downloads/
-cd /usr/local/share/ca-certificates/soho-ball/
+cd /usr/local/share/ca-certificates/
 sudo update-ca-certificates
 
 cd ~/production
