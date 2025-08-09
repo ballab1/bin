@@ -188,6 +188,9 @@ EOF
     jq '.' "${daemonFile}.tmp" > "$daemonFile"
     chown root:root "$daemonFile"
     chmod 644 "$daemonFile"
+    mkdir -p /etc/docker/certs.d/registry.ubuntu.home:443
+    chown -R root:root /etc/docker/certs.d
+    ln -s /mnt/GIT/Soho-Ball.certs/Soho-Ball_CA/certs/SohoBall_CA.crt /etc/docker/certs.d/registry.ubuntu.home:443/ca.crt
     systemctl restart docker
 }
 
