@@ -7,7 +7,7 @@ set -e
 ## only ever define READ-ONLY vars in global scope
 
 declare -r TOOLS="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )" 
-declare -r JENKINS_URL="http://svc_ctdciauto:78%5EGPgau%3FySW%23f%3Dx@ci-server-18.usd.lab.emc.com:8080"
+declare -r JENKINS_URL="http://svc_cxxxxo:78%xxxxxxxxxxxxxxxxxxDx@ci-server-18.usd.lab.emc.com:8080"
 
 # global exceptions to above rule
 declare -i dying=0
