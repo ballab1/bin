@@ -1,0 +1,12 @@
+#!/bin/bash
+
+declare host="$(hostname -s)"
+for h in {1..8};do
+    [ "$h" = 2 ] && continue
+    [ "s$h" = "$host" ] && continue
+    echo "rebooting s$h"
+    ssh s$h 'sudo systemctl reboot'
+done
+
+echo "rebooting $host"
+ssh "$host" 'sudo systemctl reboot'
