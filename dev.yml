@@ -20,7 +20,7 @@ services:
             - "s7.ubuntu.home:10.3.1.14"
             - "s8.ubuntu.home:10.3.1.15"
         hostname: dev
-        image: ${DOCKER_REGISTRY:-s2.ubuntu.home:5000/}${CONTAINER_OS:-alpine}/build_container:${CONTAINER_TAG:-latest}
+        image: ${DOCKER_REGISTRY:-${DOCKER_REGISTRY:-}}${CONTAINER_OS:-alpine}/build_container:${CONTAINER_TAG:-latest}
         logging:
             driver: json-file
             options:

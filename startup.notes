@@ -55,18 +55,18 @@ Done
 	Pulling broker       ... error
 	Pulling zoonavigator ... error
 
-	ERROR: for kafkamgr  Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
-	ERROR: for broker  Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
-	ERROR: for zookeeper  Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
-	ERROR: for zoonavigator  Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
-	ERROR: for akhq  Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
-	ERROR: for kafkaeagle  Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
-	Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
-	Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
-	Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
-	Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
-	Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
-	Get https://s2.ubuntu.home:5000/v2/: http: server gave HTTP response to HTTPS client
+	ERROR: for kafkamgr  Get https://${DOCKER_REGISTRY:-}v2/: http: server gave HTTP response to HTTPS client
+	ERROR: for broker  Get https://${DOCKER_REGISTRY:-}v2/: http: server gave HTTP response to HTTPS client
+	ERROR: for zookeeper  Get https://${DOCKER_REGISTRY:-}v2/: http: server gave HTTP response to HTTPS client
+	ERROR: for zoonavigator  Get https://${DOCKER_REGISTRY:-}v2/: http: server gave HTTP response to HTTPS client
+	ERROR: for akhq  Get https://${DOCKER_REGISTRY:-}v2/: http: server gave HTTP response to HTTPS client
+	ERROR: for kafkaeagle  Get https://${DOCKER_REGISTRY:-}v2/: http: server gave HTTP response to HTTPS client
+	Get https://${DOCKER_REGISTRY:-}v2/: http: server gave HTTP response to HTTPS client
+	Get https://${DOCKER_REGISTRY:-}v2/: http: server gave HTTP response to HTTPS client
+	Get https://${DOCKER_REGISTRY:-}v2/: http: server gave HTTP response to HTTPS client
+	Get https://${DOCKER_REGISTRY:-}v2/: http: server gave HTTP response to HTTPS client
+	Get https://${DOCKER_REGISTRY:-}v2/: http: server gave HTTP response to HTTPS client
+	Get https://${DOCKER_REGISTRY:-}v2/: http: server gave HTTP response to HTTPS client
 
 	add 'rsyslog.conf'
 

@@ -186,4 +186,4 @@ fi
 declare option=$1
 shift
 
-docker run --rm "${DOCKER_REGISTRY:-s2.ubuntu.home:5000/}thirdparty/kcat:$KCAT_VERSION" kafkacat $option -b $KAFKA_BOOTSTRAP_SERVERS "$@" 
+docker run --rm "${DOCKER_REGISTRY:-}thirdparty/kcat:$KCAT_VERSION" kafkacat $option -b $KAFKA_BOOTSTRAP_SERVERS "$@" 

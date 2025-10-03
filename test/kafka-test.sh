@@ -25,5 +25,5 @@ KAFKA_JSON="
     }
 }"
 
-echo "$KAFKA_JSON" | sed s/\"\"/null/g | jq -c '.' | docker run -i --rm --network=host 's2.ubuntu.home:5000/docker.io/edenhill/kcat:1.7.1' -b "${broker}" -P -t 'test-events'
+echo "$KAFKA_JSON" | sed s/\"\"/null/g | jq -c '.' | docker run -i --rm --network=host "${DOCKER_REGISTRY:-}docker.io/edenhill/kcat:1.7.1" -b "${broker}" -P -t 'test-events'
 echo "$duration"

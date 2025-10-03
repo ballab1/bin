@@ -2,10 +2,10 @@
 
 START="$(date  '+%s')"
 while read -r image; do
-  docker pull "s4.ubuntu.home:5000/$image"
-  docker tag "s4.ubuntu.home:5000/$image"  "s2.ubuntu.home:5000/$image"
-  docker push "s2.ubuntu.home:5000/$image"
-  docker rmi "s2.ubuntu.home:5000/$image" "s4.ubuntu.home:5000/$image"
+  docker pull "${DOCKER_REGISTRY:-}$image"
+  docker tag "${DOCKER_REGISTRY:-}$image" "${DOCKER_REGISTRY:-}$image"
+  docker push "${DOCKER_REGISTRY:-}$image"
+  docker rmi "${DOCKER_REGISTRY:-}$image" "${DOCKER_REGISTRY:-}$image"
   echo
 done < images.txt
 
