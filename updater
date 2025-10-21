@@ -2,7 +2,7 @@
 
 
 #shellcheck disable=SC2016
-declare APPS='[ { "app": "docker-compose", "version": "2.40.0",  "hw": "x86_64", "compressed": "false", "comment":"# NA",     "remote": "https://github.com/docker/compose/releases/download/v${version}/docker-compose-${OS}-${HW}" },                                         
+declare APPS='[ { "app": "docker-compose", "version": "2.40.1",  "hw": "x86_64", "compressed": "false", "comment":"# NA",     "remote": "https://github.com/docker/compose/releases/download/v${version}/docker-compose-${OS}-${HW}" },                                         
                 { "app": "docker-scout",   "version": "1.18.4",  "hw": "x86_64", "compressed": "true",  "comment":"# NA",     "remote": "https://github.com/docker/scout-cli/releases/download/v${version}/docker-scout_${version}_${OS}_${ARCH}.tar.gz" },                     
                 { "app": "git-crypt",      "version": "0.8.0",   "hw": "all",    "compressed": "false", "comment":"# custom", "remote": "https://github.com/AGWA/git-crypt/releases/download/${version}/git-crypt-${version}-${OS}-${HW}" },                                    
                 { "app": "http-ping",      "version": "1.2.4",   "hw": "x86_64", "compressed": "true",  "comment":"# NA",     "remote": "https://github.com/fever-ch/http-ping/releases/download/v${version}/http-ping_${version}_${OS}_${ARCH}.tar.gz" },                                    
