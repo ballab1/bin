@@ -1,0 +1,24 @@
+#!/bin/bash
+
+declare version=${1:-7.5.1}
+
+function getImage()
+{
+    local -r image=${1:?}
+    local -r registry_server=${REGISTRY_SERVER:-s2.ubuntu.home:5000}
+
+    [ "$(docker image ls -q $image)" ] || docker pull "$image"
+    docker tag "$image" "${registry_server}/${image##*/}"
+    docker rmi "$image"
+    docker push "${registry_server}/${image##*/}"
+    docker rmi "${registry_server}/${image##*/}"
+}
+
+getImage docker.elastic.co/beats/auditbeat:$version
+getImage docker.elastic.co/apm/apm-server:$version
+getImage docker.elastic.co/elasticsearch/elasticsearch:$version
+getImage docker.elastic.co/kibana/kibana:$version
+getImage docker.elastic.co/logstash/logstash:$version
+getImage docker.elastic.co/beats/filebeat:$version
+getImage docker.elastic.co/beats/journalbeat:$version
+getImage docker.elastic.co/beats/metricbeat:$version

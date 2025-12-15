@@ -1,0 +1,18 @@
+#!/bin/bash
+
+declare text='
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Calculating upgrade...
+0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.
+'
+#echo "$text"
+
+
+declare pattern='\d+ upgraded, \d+ newly installed, \d+ to remove and \d+ not upgraded'
+#declare pattern='\d+ upgraded'
+
+declare msg=$(grep -P "$pattern" <<< "$text" ||:)
+echo "$msg"
+

@@ -1,0 +1,21 @@
+#!/bin/bash
+#############################################################################
+#
+#   createUserAndGroup
+#
+#############################################################################
+
+
+declare -r user=${1:?}
+declare -r uid=${2:?}
+declare -r group=${3:?}
+declare -r gid=${4:?}
+declare -r homedir=${5:?}
+declare -r shell=${6:?}
+
+/usr/sbin/groupadd --gid "${gid}" "${group}"
+if [ "$homedir" = '--no-create-home' ]; then
+    /usr/sbin/useradd  --no-create-home --uid "${uid}" --gid "${gid}" --shell "${shell}" "${user}" 
+else
+    /usr/sbin/useradd --home-dir "$homedir" --uid "${uid}" --gid "${gid}" --shell "${shell}" "${user}" 
+fi

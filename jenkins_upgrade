@@ -1,0 +1,50 @@
+#!/bin/bash
+
+declare -r jenkinsUrl=${1:-http://mirrors.jenkins-ci.org/war/latest/jenkins.war}
+declare -r jenkinsTmp=jenkins.new.war
+
+# ensure this script is run as root
+if [[ $EUID != 0 ]]; then
+  sudo $0
+  exit
+fi
+
+cd /usr/share/jenkins
+[[ -e ${jenkinsTmp} ]] && rm ${jenkinsTmp}
+wget -O ${jenkinsTmp} ${jenkinsUrl}
+[[ $? -gt 0 ]] && die 'Unable to get latest jenkins.war'
+[[ ! -e ${jenkinsTmp} ]] && die 'Unable to get latest jenkins.war'
+
+# determine the correct name for the jar from the versino in the manifest file
+declare jenkinsVersion=$(unzip -p ${jenkinsTmp} META-INF/MANIFEST.MF | grep Jenkins-Version | awk '{sub(/\r/,"",$0);print;}')
+echo "Downloaded ${jenkinsVersion}"
+declare jenkinsWar=jenkins.$(echo "${jenkinsVersion}" | awk '{sub(/\./,"-",$2);print $2;}').war
+
+
+# if file has already been downloaded, just remove temp file and exit
+if [[ -e ${jenkinsWar} ]]; then
+  echo "No update to perform. ${jenkinsWar} already exists"
+  rm ${jenkinsTmp}
+  exit
+fi
+
+
+# create the new war file and stop any currently running jenkins instance, along with the old logs
+mv ${jenkinsTmp} ${jenkinsWar}
+systemctl stop jenkins
+rm /var/log/jenkins/*
+
+
+# if the old jenkins.war is a symbolic link just remove it, otherwise rename it
+if [[ -L jenkins.war ]]; then
+  rm jenkins.war
+elif [[ -f jenkins.war ]]; then
+  declare oldJenkinsVersion=$(unzip -p jenkins.war META-INF/MANIFEST.MF | grep Jenkins-Version | awk '{sub(/\r/,"",$0);print;}')
+  declare oldJenkinsWar=jenkins.$(echo "${oldJenkinsVersion}" | awk '{sub(/\./,"-",$2);print $2;}').war
+  mv jenkins.war ${oldJenkinsWar}
+fi
+
+
+# setup the link for the new jenkins.war and restart the jenkins service
+ln -s ${jenkinsWar} jenkins.war
+systemctl start jenkins

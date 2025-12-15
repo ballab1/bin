@@ -1,0 +1,124 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use Getopt::Long;
+use POSIX;
+use File::Basename;
+
+my $delay = 3;
+my $output;
+
+
+$| = 1;  # flush data to disk asap
+
+sub logMessage($) {
+  my $msg = shift;
+  my $pid = $$;
+  
+  my @tm = localtime();
+  open(FH, '>>', '/emc/ballab1/Jenkins/'.basename($0).'.'.$pid.'.log');
+  printf FH "%02d:%02d:%02d:%d %s\n", $tm[2], $tm[1], $tm[0], $pid, $msg;
+  close FH;
+}
+
+# check if there is a prior instance running. Exit if there is, because we only want one.
+sub checkNotRunning() {
+    my $command = 'ps -C '.basename($0).' -o "%c" --no-headers';
+    my @result;
+    chomp(@result = qx{$command 2>&1});
+
+    logMessage('should exit(0).')  if (@result > 1);
+    logMessage('should keep running.')  unless (@result > 1);
+    if (@result > 1) {
+       chomp(@result = qx{'ps -efwH' 2>&1});
+       logMessage($_) foreach (@result);
+       while (@result > 1) {
+          sleep(600);
+       }
+    }
+    logMessage($_) foreach (@result);
+}
+
+
+# Get the number of idle ticks for all processors
+sub idle_ticks() {
+    my $total_ticks;
+    my $all_idle;
+    my $sum = 0;
+    my @idle_time;
+
+    open my $stat_fh, '<', '/proc/stat' or die "Cannot open stat: $!";
+    while (my $stat_line = <$stat_fh>) {
+        next unless $stat_line =~ /^cpu(\d+)/;
+        my @stats = split ' ', $stat_line;
+        my $total_ticks = $stats[1] + $stats[2] + $stats[3] + $stats[4] + $stats[5] + $stats[6] + $stats[7] + $stats[8];
+        $idle_time[$1] = [ $stats[4], $total_ticks ];
+    }
+    close $stat_fh;
+    return @idle_time;
+}
+
+# Format a percentage
+sub pct($$) {
+    my $part = shift;
+    my $whole = shift;
+
+    sprintf '%0.2f', 100 * (1 - ($part < 0 ? 0 : $part) / $whole);
+}
+
+# Calculate the change in usage
+sub usage_delta($$) {
+    my $last_ref = shift;
+    my $new_ref = shift;
+    my $total_elapsed = 0;
+    my $total_idle = 0;
+    my @usage;
+
+    for (my $idx = 0; $idx <= $#$last_ref; $idx++) {
+        my $delta = $new_ref->[$idx]->[0] - $last_ref->[$idx]->[0];
+        my $elapsed = $new_ref->[$idx]->[1] - $last_ref->[$idx]->[1];
+        $total_idle += $delta;
+        $total_elapsed += $elapsed;
+        push @usage, pct($delta, $elapsed);
+    }
+    unshift @usage, pct($total_idle, $total_elapsed);
+    return @usage;
+}
+
+
+#-----------------------------------------------------------------------
+#
+#   MAIN code
+#
+#-----------------------------------------------------------------------
+
+checkNotRunning();
+
+GetOptions(
+  'p|delay=i' => \$delay,
+  'o|output=s' => \$output,
+) or die "Invalid command line arguments";
+
+# Get the number of ticks per second from the system
+my $ticks_per_sec = POSIX::sysconf(&POSIX::_SC_CLK_TCK);
+
+# Get a baseline
+my @last_idle = idle_ticks;
+
+my $out_fh = \*STDOUT;
+if (defined $output) {
+    open $out_fh, '>', $output or die "Cannot open $output for writing: $!";
+    select $out_fh;
+}
+
+print join(',', 'Time', 'All', 0..$#last_idle) . "\n";
+while (1) {
+    sleep $delay;
+    my $date = time;
+    my @new_idle = idle_ticks;
+    my @data = usage_delta(\@last_idle, \@new_idle);
+    print join(',', $date, @data) . "\n";
+    @last_idle = @new_idle;
+}

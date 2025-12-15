@@ -1,0 +1,153 @@
+#!/bin/bash 
+#clear
+set -o errexit
+set -o nounset
+set -o pipefail
+IFS=$'\n\t'
+
+
+
+declare pattern1='\{?(\n)?([[:space:]])"errors"?([[:space:]]):?([[:space:]])\['
+declare response='{
+  "errors" : [ {
+    "status" : 404,
+    "message" : "File not found."
+  } ]
+}'
+
+declare pattern='\{\n*([[:space:]])*"errors"([[:space:]])*:([[:space:]])*\['
+declare response2='{"errors":[{"status":404,"message":"File not found."}]}'
+
+if [[ ! $response =~ $pattern ]]; then
+    echo 'pattern not found'
+else
+    echo "$response"
+fi
+
+
+exit 0
+
+
+
+
+
+
+
+
+
+
+
+declare val='0'
+declare -A xx
+
+function roVal()
+{
+   local -r val=$1
+   echo "roVal:  $val"
+}
+
+function rwVal()
+{
+    local val=$1
+    val="$(( val + 1 ))"
+    echo "rwVal:  $val"
+}
+
+function otherVal()
+{
+    local -r val=$1
+    roVal "$(( val + 2 ))"
+    rwVal "$(( val + 2 ))"
+    echo "otherVal:  $val"
+}
+
+function anOtherVal()
+{
+    declare -r val2=$1
+}
+function exportVal()
+{
+    val3=$1
+    export val3
+}
+function otherExportVal()
+{
+    declare -rx val5=$1
+    export val5
+}
+function anOtherExportVal()
+{
+    declare -r val5=$1
+    export val5
+}
+
+function assocArray()
+{
+   xx=([a]=1 [b]=2)
+}
+
+function otherAssocArray()
+{
+   declare -Ar xx1=([a]=1 [b]=2)
+}
+
+function badAssocArray()
+{
+   xx2=([a]=1 [b]=2)
+}
+
+function exportAssocArray()
+{
+   declare -Arx xx3=([a]=1 [b]=2)
+}
+
+function xxx() {
+
+echo "val:  $val"
+roVal '1'
+rwVal '1'
+otherVal '1'
+echo "val:  $val"
+
+set +o errexit
+set +o nounset
+
+anotherVal 'test'
+echo "anotherVal:  $val2"
+
+exportVal 'test'
+echo "exportVal:  $val3"
+declare -p val3
+
+otherExportVal 'test'
+echo "anOtherExportVal:  $val4"
+declare -p val4
+
+anOtherExportVal 'test'
+echo "anOtherExportVal:  $val5"
+declare -p val5
+
+assocArray 
+echo "assocArray:  ${#xx[*]}"
+declare -p xx
+
+otherAssocArray 
+echo "otherExportAssocArray:  ${#xx1[*]}"
+declare -p xx1
+
+badAssocArray 
+echo "badAssocArray:  ${#xx2[*]}"
+declare -p xx2
+
+exportAssocArray 
+echo "exportAssocArray:  ${#xx3[*]}"
+declare -p xx3
+}
+
+eval "declare -A IMAGES=( $(docker images -a --format '[{{.ID}}]="{{.Repository}}:{{.Tag}}"' --no-trunc) )"
+x='sha256:000000000000000000000008353234e766e80766bffb49e1cbfb53ed70bccc1a'
+printf "%s\n" "${x}  ${IMAGES[$x]:-}"
+
+#for x in "${!IMAGES[@]}"; do 
+#    printf "%s\n" "${x}  ${IMAGES[$x]}"
+#done

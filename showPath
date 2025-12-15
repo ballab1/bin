@@ -1,0 +1,4 @@
+#!/bin/bash
+
+declare arg=${1:-$PATH}
+echo ${arg} | awk '{print $0}' RS=':'

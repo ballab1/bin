@@ -1,0 +1,17 @@
+#!/bin/bash
+#############################################################################
+#
+#   dockerImages
+#
+#############################################################################
+
+declare -a images
+
+# show image report
+echo
+mapfile -t images < <(docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.CreatedSince}}\t{{.Size}}")
+echo -e "\e[97m${images[0]}\e[0m"
+unset images[0]
+printf '%s\n' "${images[@]}" | sort 
+echo
+

@@ -1,0 +1,181 @@
+#!/usr/bin/perl
+
+# NOTES
+#What:       /proc/diskstats
+#Description:
+#        The /proc/diskstats file displays the I/O statistics
+#        of block devices. Each line contains the following 14
+#        fields:
+#         1 - major number
+#         2 - minor mumber
+#         3 - device name
+#         4 - reads completed successfully
+#         5 - reads merged
+#         6 - sectors read
+#         7 - time spent reading (ms)
+#         8 - writes completed
+#         9 - writes merged
+#        10 - sectors written
+#        11 - time spent writing (ms)
+#        12 - I/Os currently in progress
+#        13 - time spent doing I/Os (ms)
+#        14 - weighted time spent doing I/Os (ms)
+#        For more details refer to Documentation/iostats.txt
+
+use strict;
+use warnings;
+use Getopt::Long;
+use File::Basename;
+
+use constant {
+  TRUE => 1,
+  FALSE => 0
+};
+
+
+$| = 1;  # flush data to disk asap
+
+sub logMessage($) {
+  my $msg = shift;
+  my $pid = $$;
+  
+  my @tm = localtime();
+  open(FH, '>>', '/emc/ballab1/Jenkins/'.basename($0).'.'.$pid.'.log');
+  printf FH "%02d:%02d:%02d:%d %s\n", $tm[2], $tm[1], $tm[0], $pid, $msg;
+  close FH;
+}
+
+# check if there is a prior instance running. Exit if there is, because we only want one.
+sub checkNotRunning() {
+    my $command = 'ps -C '.basename($0).' -o "%c" --no-headers';
+    my @result;
+    chomp(@result = qx{$command 2>&1});
+
+    logMessage('should exit(0).')  if (@result > 1);
+    logMessage('should keep running.')  unless (@result > 1);
+    if (@result > 1) {
+       chomp(@result = qx{'ps -efwH' 2>&1});
+       logMessage($_) foreach (@result);
+       while (@result > 1) {
+          sleep(600);
+       }
+    }
+    logMessage($_) foreach (@result);
+}
+
+
+my $delay = 3;
+my $devices = {};
+my $lastValues = {};
+my $bfrPrimed = FALSE;
+my $output;
+
+my @fields = qw(
+    major_number
+    minor_mumber
+    device_name
+    reads_completed_successfully
+    reads_merged
+    sectors_read
+    time_spent_reading
+    writes_completed
+    writes_merged
+    sectors_written
+    time_spent_writing
+    IOs_currently_in_progress
+    time_spent_doing_IOs
+    weighted_time_spent_doing_IOs
+);
+
+
+
+sub get_devices() { 
+  my ($opt_name, $opt_value) = @_;
+  my @ipdevs = split('[ ,]', $opt_value);
+  
+  foreach (@ipdevs) {
+    $devices->{$_} = 0;
+  }
+}
+
+sub getLatestData() {
+    open my $ds_fh, '<', '/proc/diskstats' or die "Cannot open diskstats: $!";
+    my $diskstats = do { local $/; <$ds_fh> };
+    close $ds_fh;
+    return $diskstats;
+}
+
+sub parseData($) {
+    my $data = shift;
+    my $drive = $data->[2];
+    $lastValues->{$drive} = []    unless (exists $lastValues->{$drive});
+    my @results = ();
+    
+    for (my $i=0; $i<scalar(@{$data}); $i++) {
+        if ($i < 3) {
+            $results[$i] = $data->[$i];
+            next;
+        }
+        $results[$i] = ($data->[$i] - $lastValues->{$drive}[$i])   if (defined $lastValues->{$drive}[$i]);
+        $lastValues->{$drive}[$i] = $data->[$i];
+    }
+    return @results;
+}
+
+sub req_device($) {
+    my $dev = shift;
+    foreach (keys %{$devices}) {
+        return TRUE if ($dev eq $_);
+    }
+    return FALSE;
+}
+
+sub trim($) {
+    my $s = shift;
+    $s =~ s/^\s+|\s+$//g;
+    return $s;
+}
+
+
+#-----------------------------------------------------------------------
+#
+#   MAIN code
+#
+#-----------------------------------------------------------------------
+
+checkNotRunning();
+
+GetOptions(
+  'p|delay=i' => \$delay,
+  'o|output=s' => \$output,
+  'd|devices=s' => \&get_devices,
+) or die "Invalid command line arguments";
+
+
+my $out_fh = \*STDOUT;
+if (defined $output) {
+    open $out_fh, '>', $output or die "Cannot open $output for writing: $!";
+    select $out_fh;
+}
+if (scalar keys %{$devices} == 0) {
+  $devices = {'sda1' => 0, 'sdb1' => 1};
+}
+
+print join(',', 'Time', @fields) . "\n";
+
+while (1) {
+    my $date = time;
+    my $diskstats = getLatestData();
+    
+    foreach (split "\n", $diskstats) {
+        my $stats = trim($_);
+        next if (length($stats) == 0);
+        my @data = split('\s+', $stats);
+        next unless ( req_device($data[2]) );
+
+        my @diffs = parseData(\@data);
+        print join(',', $date, @diffs) . "\n"  unless ($bfrPrimed == FALSE);
+    }
+    $bfrPrimed = TRUE;
+    sleep $delay;
+}

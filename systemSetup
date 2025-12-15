@@ -1,0 +1,543 @@
+#!/bin/bash
+
+# need to include changes to
+#    /etc/dhcp/dhclient.conf
+
+DOCKER_COMPOSE_VER=2.30.1
+GIT_CRYPT_VER=0.7.0
+
+#----------------------------------------------------------------------------
+function systemSetup.ALL() {
+    local method
+    for method in $(systemSetup.functions | grep -E '\d' | LC_ALL=C sort); do
+        {
+            echo
+            echo "systemSetup.${method//. /_}"
+        } >&2
+        systemSetup."${method//. /_}"
+    done
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.00_init() {
+
+    [ "${myHOME:-}" ] || myHOME='/home/bobb'
+    [ "${myUID:-}" ] || myUID='1026'
+    [ "${myGID:-}" ] || myGID="$(getent group users | cut -d ':' -f 3)"
+
+    cd "${myHOME}"
+    [ -d '.bin' ] || git clone --recursive https://github.com/ballab1/bin .bin
+
+    mkdir -p .org
+    [ -e .bash_aliases ] && mv .bash_aliases .org/
+    [ -e .bash_logout ] && mv .bash_logout .org/
+    [ -e .bashrc ] && mv .bashrc .org/
+
+    local -A symlinks=(["${myHOME}/.bash_aliases"]="${myHOME}/.bin/bash_aliases"
+                       ["${myHOME}/.bash_logout"]="${myHOME}/.bin/bash_logout"
+                       ["${myHOME}/.bashrc"]="${myHOME}/.bin/bashrc"
+                       ["${myHOME}/.gitconfig"]="${myHOME}/.bin/gitconfig"
+                       ["${myHOME}/.tmux.conf"]="${myHOME}/.tmux/tmux.conf"
+                      )
+    local link
+
+    echo 'Redirect own BASH files'
+    for link in "${!symlinks[@]}"; do
+        [ -f "${symlinks[$link]}" ] || continue
+        [ -f "$link" ] && ( stat --format='%i' "$link" &> /dev/null && rm "$link" )
+        systemSetup.run ln -s "${symlinks[$link]}" "${link}"
+        chown "${myUID:-1026}:${myGID:-100}" "$link"
+    done
+
+    apt-get update
+    apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+
+    local USER=bob_tmp
+    grep -s "$USER" /etc/passwd  && userdel "$USER"
+    [ ! -f /etc/sudoers.d/myOverrides ] || rm /etc/sudoers.d/myOverrides
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.01_addSudoers() {
+
+    local target=/etc/sudoers.d/myOverrides
+    [ -f "$target" ] && return 0
+
+    echo "Add user to $target"
+    cat << EOF > "$target"
+bobb      ALL=(ALL:ALL) NOPASSWD:  ALL
+EOF
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.02_requiredPackages() {
+
+    echo 'Setting up required packages'
+
+    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+    chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+
+    add-apt-repository universe
+    apt-get update
+    systemSetup.run apt install -y build-essential nfs-common nfs-kernel-server tasksel libxml2 libxml2-dev
+    systemSetup.run apt install -y openjdk-17-jre-headless cifs-utils docker-compose jq gh xmlstarlet zip unzip
+    systemSetup.run apt install -y python3 python3-pip python-is-python3
+    systemSetup.run apt install -y libssl-dev librdkafka++1 librdkafka1 python3-confluent-kafka
+    systemSetup.run apt install -y net-tools
+
+    local host="$(hostname -f)"
+    [ "${host%.*}" != "$host" ] || hostnamectl set-hostname "${host%%.*}.ubuntu.home"
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.03_updateNetworkConfig() {
+
+    # get our local interface name
+    local iface="$(ip -4 -j address show scope global dynamic|jq -r '.[0].addr_info[].label')"
+    local netCfg=$(grep -r "${iface}:" /etc/netplan/ | cut -d ':' -f 1)
+
+    cat << EOF > "$netCfg"
+# This is the network config written by 'subiquity'
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    ${iface}:
+      dhcp4: true
+      dhcp4-overrides:
+        use-dns: false
+      dhcp6: true
+      dhcp6-overrides:
+        use-dns: false
+      nameservers:
+        search: [ ubuntu.home, home ]
+        addresses:
+          - 10.3.1.4
+          - '2601:189:4000:1126:211:32ff:feb5:932e'
+          - 8.8.8.8
+          - '2001:4860:4860::8888'
+          - 8.8.4.4
+          - '2001:4860:4860::8844'
+EOF
+    systemSetup.run netplan apply
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.04_networkMounts() {
+
+    local target=/etc/fstab
+    local -A mounts=( ['/mnt/ubuntu']='10.3.1.4:/volume1/ubuntu'
+                      ['/mnt/GIT']='10.3.1.4:/volume1/GIT'
+                      ['/mnt/k8s']='10.3.1.4:/volume1/K8S'
+                      ["${myHOME}/src"]='10.3.1.4:/volume1/ubuntu'
+                      ["${myHOME}/GIT"]='10.3.1.4:/volume1/GIT'
+#                      ['/mnt/homes']='10.3.1.4:/volume1/homes'
+#                      ['/mnt/Registry']='10.3.1.4:/volume1/Docker-Registry'
+
+                    )
+
+    touch "$target"
+    for mnt in "${!mounts[@]}";do
+        mkdir -p "$mnt"
+        sed -i "/${mnt//\//\\/} /d" "$target"
+        printf '%s %s nfs rw,vers=4\n' "${mounts[$mnt]}" "${mnt}" >> "$target"
+    done
+    mount -a ||:
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.05_getLatestApps() {
+
+    "${PROGRAM_DIR}/updater"
+    pip3 install py-spy
+
+    [ -d "${myHOME}/GIT/git-crypt" ] || return 0
+    cd "${myHOME}/GIT/git-crypt"
+    make install
+    cd "${myHOME}/.bin/utilities"
+    sudo --preserve-env --user bobb git-crypt unlock "${myHOME}/src/keys/work-stuff.key"
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.06_setupRegistryAccess() {
+
+    local daemonFile='/etc/docker/daemon.json'
+    mkdir -p "$(dirname "$daemonFile")" ||:
+    [ -f "$daemonFile" ] && rm "$daemonFile"
+    cat << EOF > "${daemonFile}.tmp"
+{
+  "insecure-registries": [
+    "s2.ubuntu.home:5000",
+    "10.3.1.9:5000",
+    "[2601:189:4000:1126:207:e9ff:febd:4fa]:5000",
+    "ubuntu-s2.home:5000"
+  ],
+  "features": {
+    "buildkit": true
+  },
+  "log-driver": "json-file",
+  "log-level": "error",
+  "log-opts": {
+    "max-file": "3",
+    "max-size": "10m"
+  },
+  "storage-driver": "overlay2"
+}
+EOF
+    jq '.' "${daemonFile}.tmp" > "$daemonFile"
+    chown root:root "$daemonFile"
+    chmod 644 "$daemonFile"
+    mkdir -p /etc/docker/certs.d/registry.ubuntu.home:443
+    chown -R root:root /etc/docker/certs.d
+    ln -s /mnt/GIT/Soho-Ball.certs/Soho-Ball_CA/certs/SohoBall_CA.crt /etc/docker/certs.d/registry.ubuntu.home:443/ca.crt
+    systemctl restart docker
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.07_updateUsersAndGroups() {
+
+    echo 'Updating users and groups'
+    [ "$(getent passwd www-data)" ] || systemSetup.run usermod  --uid 33 www-data
+    systemSetup.run groupmod --gid 33 www-data
+    [ "$(getent group mysql)" ] || systemSetup.run groupadd --gid 909 mysql
+
+    [ "$(getent group nginx)" ] || systemSetup.run groupadd --gid 1001 nginx
+    [ "$(getent passwd nginx)" ] || systemSetup.run useradd --no-create-home --gid 1001 --uid 1001 --shell /sbin/nologin nginx
+
+    [ "$(getent group nagios)" ] || systemSetup.run groupadd --gid 1002 nagios
+    [ "$(getent passwd nagios)" ] || systemSetup.run useradd --no-create-home --gid 1002 --uid 1002 --shell /sbin/nologin nagios
+
+    [ "$(getent group jenkins)" ] || systemSetup.run groupadd --gid 1003 jenkins
+    [ "$(getent passwd jenkins)" ] || systemSetup.run useradd --no-create-home --gid 1003 --uid 1003 --shell /sbin/nologin jenkins
+
+    [ "$(getent group webdav)" ] || systemSetup.run groupadd --gid 2222 webdav
+    [ "$(getent passwd webdav)" ] || systemSetup.run useradd --no-create-home --gid 2222 --uid 2222 --shell /sbin/nologin webdav
+
+    [ "$(getent group docker)" ] || systemSetup.run groupadd --gid 117 docker
+
+    # shellcheck disable=SC2154
+    systemSetup.run usermod --groups "$myNAME",docker,jenkins,nginx,nagios,www-data,webdav "$myNAME"
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.08_USER() {
+
+    if [ "$(getent passwd "${myNAME:-bobb}")" ]; then
+        systemSetup.run usermod --gid users --groups docker,jenkins,jenkins,nginx --shell /bin/bash "${myNAME:-bobb}"
+    else
+        systemSetup.run userADD --create-home --gid users --groups docker,jenkins,jenkins,nginx --shell /bin/bash -uid 1026 "${myNAME:-bobb}"
+    fi
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.09_dockerAccess() {
+
+    systemSetup.run sudo chmod a+rw /run/docker.sock
+    if [ "$(grep -Ec "^docker.+${myNAME:-bobb}" /etc/group)" -eq 0 ]; then
+        systemSetup.run sudo usermod --groups docker --append "${myNAME:-bobb}"
+    fi
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.10_installGitLFS() {
+
+    if [ -z "${myHOME:-}" ] || [ ! -d "${myHOME}/.bin" ]; then
+        echo 'need to run this from non-user'
+        return 0
+    fi
+    git lfs version &> /dev/null && return 0
+
+    echo 'install Git-LFS support'
+    curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash
+    systemSetup.run apt-get install git-lfs
+    cd "${myHOME}/.bin"
+    systemSetup.run git lfs install
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.11_jenkinsSlaveFolders() {
+
+    [[ -d /home/jenkins.s3 && -d /home/jenkins.s4 ]] && return 0
+    if [ -z "${myUID:-}" ]; then
+        echo 'need to run this from non-user'
+        return 0
+    fi
+
+    echo 'make directories for Jenkins Slaves'
+    systemSetup.run mkdir -p /home/jenkins.s3 ||:
+    systemSetup.run mkdir -p /home/jenkins.s4 ||:
+    chown "${myUID}:$myGID" /home/jenkins.s3 /home/jenkins.s4
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.14_getGitRepos() {
+
+    local -A repos=(["${myHOME}/.enterprise"]='https://github.com/ballab1/enterprise-config-for-git ballab1'
+                    ["${myHOME}/.inf"]='https://github.com/ballab1/secrets'
+                    ["${myHOME}/.tmux"]='https://github.com/ballab1/tmux_config'
+                    ["${myHOME}/.ssh"]='https://github.com/ballab1/common_ssh_config'
+                   )
+    local -i isDone=0
+    local dir
+    for dir in "${!repos[@]}"; do
+        if [ -d "$dir" ]; then
+          (
+            cd "$dir"
+            local key="${myHOME}/src/keys/$(basename "$(git remote -v|awk '{print $2;exit}')").key"
+            [ -e "$key" ] && git-crypt unlock "$key"
+          ) ||:
+        else
+            isDone=1
+        fi
+    done
+    [ $isDone -eq 0 ] && return 0
+    if [[ -z "${myUID:-}" || -z "${myGID:-}" || -z "${myHOME:-}" ]]; then
+        echo 'need to run this from non-user'
+        return 0
+    fi
+
+    echo 'setting up standard GIT repos'
+    local -a repoInfo
+    for dir in "${!repos[@]}"; do
+        [ -d "$dir" ] && rm -rf "$dir"
+        unset repoInfo
+        mapfile -t repoInfo < <(echo "${repos["$dir"]}" | awk '{print $0}' RS=' ')
+        if [ ${#repoInfo[*]} -gt 1 ] && [ "${repoInfo[1]}" ]; then
+            systemSetup.run git clone --recurse-submodules -b "${repoInfo[1]}" "${repoInfo[0]}" "$dir"
+        else
+            systemSetup.run git clone --recurse-submodules "${repoInfo[0]}" "$dir"
+        fi
+        find "$dir" -exec chown -R "${myUID}:$myGID" '{}' \;
+        (
+          cd "$dir"
+          local key="${myHOME}/src/keys/$(basename "$(git remote -v|awk '{print $2;exit}')").key"
+          [ -e "$key" ] && git-crypt unlock "$key"
+          [ "$dir" = "${myHOME}/.ssh" ] && "${myHOME}/.bin/fixSsh"
+        ) ||:
+    done
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.15_redirectOwnBashFiles() {
+
+    local -A symlinks=(["${myHOME}/.bash_aliases"]="${myHOME}/.bin/bash_aliases"
+                       ["${myHOME}/.bash_logout"]="${myHOME}/.bin/bash_logout"
+                       ["${myHOME}/.bashrc"]="${myHOME}/.bin/bashrc"
+                       ["${myHOME}/.gitconfig"]="${myHOME}/.bin/gitconfig"
+                       ["${myHOME}/.tmux.conf"]="${myHOME}/.tmux/tmux.conf"
+                      )
+
+    echo 'Redirect own BASH files'
+    for link in "${!symlinks[@]}"; do
+        [ -f "$link" ] && ( stat --format='%i' "$link" &> /dev/null && sudo rm "$link" )
+        systemSetup.run ln -s "${symlinks[$link]}" "${link}"
+        chown "${myUID:-bobb}:${myGID:-100}" "$link"
+    done
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.22_rsyslog() {
+
+    if [ "$(grep -c '^*.* @@10.3.1.15:514' /etc/rsyslog.conf)" -eq 0 ]; then
+        if [ ! -f /mnt/ubuntu/rsyslog.client.conf ]; then
+            echo 'no template found'
+            return 0
+        fi
+        cp /mnt/ubuntu/rsyslog.client.conf /etc/rsyslog.conf
+        systemSetup.run sudo systemctl restart rsyslog
+    fi
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.23_nodeExplorer() {
+
+    "${PROGRAM_DIR}/install.nodeExplorer"
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.checkUser() {
+
+    local uid="$(getent passwd bobb)"
+    [ -z "${uid:-}" ] && return 0
+    [ "$(echo "$uid" | cut -d ':' -f 3)" = 1026 ] && return 0
+    echo 'invalid UID. Change UID to 1026 for nas compatibility'
+    exit 1
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.doFunction() {
+
+    local -a functions
+    mapfile -t functions < <(systemSetup.functions ||:)
+
+    local arg
+    local -a results
+
+    # verify args
+    for arg in "$@"; do
+        mapfile -t results < <(printf '%s\n' "${functions[@]}" | grep "$arg" ||:)
+        if [ ${#results[*]} -ne 1 ]; then
+             echo 'Invalid arguments'
+             return 0
+        fi
+    done
+
+    # run args
+    for arg in "$@"; do
+        mapfile -t results < <(printf '%s\n' "${functions[@]}" | grep "$arg" ||:)
+        echo "systemSetup.${results[0]//. /_}"
+        "systemSetup.${results[0]//. /_}"
+    done
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.functions() {
+
+    # list all user functions
+    grep -E '^function' "${PROGRAM_DIR}/$PROGNAME" \
+    | sed -re 's|^function systemSetup.(.+)\s*\(.+$|\1|' \
+    | grep -vE '^(checkUser|functions|doFunction|getUserInfo|run|showEnvironment|updateApp|usage|userInfo|verifyPermisions)$' \
+    | sed -E 's|_|. |g' \
+    | LC_ALL=C sort
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.getUserInfo() {
+
+    local key=${1:?}
+    # shellcheck disable=SC2116,SC1090
+    (IFS=' ' source "$USER_INFO_FILE"; echo "$key")
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.run() {
+
+    # shellcheck disable=SC2116,SC2048,SC2086
+    printf '\e[93m%s\e[0m\n' "$(IFS=' ' echo $*)"
+    if [ "${DEBUG:-0}" -eq 0 ]; then
+        "$@" > /dev/null
+    else
+        "$@"
+    fi
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.showEnvironment() {
+    env
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.updateApp() {
+
+    local -r file="${1:?}"
+    local -r target="${2:?}"
+    local -r version="${3:?}"
+    local -r url="${4:?}"
+
+    local -r app="$(basename "$target")"
+    if [ -f "$target" ]; then
+
+        local -r app_ver=$("$target" --version | awk '{ print substr($3,0,length($3)-1)}')
+        [ "$version" != "$app_ver" ] || return 0
+        echo "Updating $app to '$version'"
+        if [ -h "$target" ]; then
+            rm "$target"
+        else
+            echo "Saving default $app"
+            [ -e "/usr/local/bin/$app.$app_ver" ] || mv "$target" "/usr/local/bin/$app.$app_ver"
+        fi
+    fi
+
+    echo "Downloading $version of $app"
+    systemSetup.run curl -L "$url" -o "$file"
+    chmod 755 "$file"
+    systemSetup.run ln -s "$file" "$target"
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.usage() {
+
+    echo
+    echo "$PROGNAME -  available functions:"
+    local -a methods
+    mapfile -t methods < <(systemSetup.functions)
+    printf '    %s\n' "${methods[@]}"
+    echo
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.userInfo() {
+    echo "myNAME='${1//:}'"
+    echo "myUID=${3//:}"
+    echo "myGID=${4//:}"
+    echo "myFULLNAME='${5//:}'"
+    echo "myHOME=${6//:}"
+    echo "mySHELL=${7//:}"
+}
+
+#----------------------------------------------------------------------------
+function systemSetup.verifyPermisions() {
+
+    local perms="${1:?}"
+    local file="${2:?}"
+
+    if [ "$(stat --format '%a %u:%g' "$file")" != "${perms} ${myUID}:$myGID" ]; then
+        echo -n "fixing '$file':: was $(stat --format '%A %U:%G' "$file")"
+        sudo chown "${myUID}:$myGID" "$file"
+        sudo chmod "$perms" "$file"
+        echo "  is now $(stat --format '%A %U:%G' "$file")"
+        echo
+        echo
+    fi
+}
+
+##################################################################################################
+#
+#      MAIN
+#
+##################################################################################################
+
+# Use the Unofficial Bash Strict Mode
+set -o errexit
+set -o nounset
+set -o pipefail
+IFS=$'\n\t'
+
+declare -r USER_INFO_FILE=/tmp/userInfo
+declare -r PROGNAME="$(basename "${BASH_SOURCE[0]}")"
+declare -r PROGRAM_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+declare -ri MAX_ROOT_FN=11
+
+if [ $# -eq 0 ] || [[ "${1,,}" = *help ]] || [[ "${1,,}" = *usage ]]; then
+    systemSetup.usage
+    exit
+fi
+systemSetup.checkUser
+
+
+if [ ${EUID:-0} -ne 0 ] && [ "${1::2}" -le "$MAX_ROOT_FN" ]; then
+    # shellcheck disable=SC2046
+    systemSetup.userInfo $(getent passwd $EUID | awk '{printf ":%s:\n", $0}' RS=':') > "$USER_INFO_FILE"
+    sudo --preserve-env "$0" "$@"
+    rm "$USER_INFO_FILE"
+    exit
+
+elif [ ${EUID:-0} -eq 0 ] && [ "${1::2}" -gt "$MAX_ROOT_FN" ]; then
+    sudo --preserve-env --user bobb "$0" "$@"
+    rm "$USER_INFO_FILE"
+    exit
+
+elif [ ${EUID:-0} -ne 0 ]; then
+    # shellcheck disable=SC2046
+    systemSetup.userInfo $(getent passwd $EUID | awk '{printf ":%s:\n", $0}' RS=':') > "$USER_INFO_FILE"
+fi
+
+
+export PATH="${PATH}:${HOME}/.bin"
+# shellcheck disable=SC1090
+[ -e "${PROGRAM_DIR}/trap.bashlib" ] && source "${PROGRAM_DIR}/trap.bashlib"
+# shellcheck disable=SC1090
+[ -e "$USER_INFO_FILE" ] && source "$USER_INFO_FILE"
+
+systemSetup.doFunction "$@"

@@ -1,0 +1,62 @@
+#!/bin/bash
+
+# Use the Unofficial Bash Strict Mode
+set -o errexit
+set -o nounset
+set -o pipefail
+IFS=$'\n\t'
+
+
+function t1() {
+    local -r arg=${1:?}
+    echo "1:$arg."
+    t2 "$arg."
+}
+function t2() {
+    local -r arg=${1:?}
+    echo "2:$arg." >&2
+    t3 "$arg."
+}
+function t3() {
+    local -r arg=${1:?}
+    echo "3:$arg."
+    t4 "$arg."
+}
+function t4() {
+    local -r arg=${1:?}
+    echo "4:$arg."
+}
+
+function xx() {
+
+the_cmd()
+{
+    echo out;
+    echo err >&2;
+}
+
+{ the_cmd > >(tee stdout.txt ); } 2> >(tee stderr.txt >&2 )
+
+sleep 1
+echo '------------- stdout.txt'
+cat stdout.txt
+echo '------------- stderr.txt'
+cat stderr.txt
+}
+
+DEBUG=1
+[ ! -f aFile ] || rm aFile
+
+if [[ "${DEBUG:-}"  ||  "${DEBUG_TRACE:-}" ]]; then
+    t1 'Hi' 2>&1 | tee aFile >&2
+else
+    t1 'Hi' &>> aFile
+fi
+
+sleep 1
+
+# results
+echo -e '\nstdout'
+echo 'stderr' >&2
+echo '------------- aFile'
+[ ! -f aFile ] || cat aFile

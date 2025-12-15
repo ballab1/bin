@@ -1,0 +1,23 @@
+#!/usr/bin/bash
+
+# run command as root
+
+declare -r cmd="$(readlink -f "$0")"
+declare -r dir="$(dirname "$cmd")"
+
+# make sure we always excute using correct order: 'all asroot'
+if [ "${1:-}" = 'all' ]; then
+    shift
+    "${dir}/all" "$cmd" "$@"
+    exit
+fi
+
+
+# ensure this script is run as root
+if [[ $EUID != 0 ]]; then
+   sudo --preserve-env PATH="${dir}:${PATH}" "$cmd" "$@"
+   exit
+fi
+
+export PATH="${dir}:${PATH}"
+"$@"

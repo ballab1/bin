@@ -1,0 +1,6 @@
+#!/bin/bash
+
+mkdir ~/GIT/ballab1
+cd  ~/GIT/ballab1
+curl -u ballab1 -s https://api.github.com/orgs/ballab1/repos?per_page=200 \
+  | ruby -rubygems -e 'require "json"; JSON.load(STDIN.read).each { |repo| %x[git clone #{repo["ssh_url"]} ]}'

@@ -1,0 +1,4 @@
+#!/bin/bash
+
+python -V
+[ "${1:-}" ] && echo "$1 $(python -c "import $1; print($1.__version__)")" 

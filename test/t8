@@ -1,0 +1,72 @@
+#!/bin/bash
+
+#----------------------------------------------------------------------------
+# calculate the elapsed time for an event
+function timer.fmtElapsed()
+{
+    local -ir elapsed=${1:?"Input parameter 'elapsed' must be passed to 'function ${FUNCNAME[0]}()'"}
+
+    printf '%02d:%02d:%02d' $((elapsed / 3600)) $((elapsed % 3600 / 60)) $((elapsed % 60))
+}
+export -f timer.fmtElapsed
+
+#----------------------------------------------------------------------------
+# log elapse time result
+function timer.logElapsed()
+{
+    local -r name=${1:?"Input parameter 'name' must be passed to 'function ${FUNCNAME[0]}()'"}
+    local -ir elapsed=${2:?"Input parameter 'elapsed' must be passed to 'function ${FUNCNAME[0]}()'"}
+
+    printf 'Time elapsed (%s): %s' "$name" "$(timer.fmtElapsed $elapsed)"
+}
+export -f timer.logElapsed
+
+#----------------------------------------------------------------------------
+# get the timestamp of a file in seconds
+function timer.getTimestamp()
+{
+    date +%s
+}
+export -f timer.getTimestamp
+
+#---------------------------------------------------------------------------- 
+
+declare -r imagesjson="$(curl --silent --unix-socket /var/run/docker.sock http://localhost/images/json?all='true')"
+declare -i count i idx t1 t2 t3 t4 t5
+declare -a IMAGE_REPOTAGS
+
+count=${1:-1000}
+t1=$(timer.getTimestamp)
+for (( i=0; i<$count; i++ )); do
+    mapfile -t IMAGE_REPOTAGS < <(jq -r '.[].RepoTags[0]|if .=="<none>:<none>" then .="" else . end' <<< "$imagesjson")
+done
+t2=$(timer.getTimestamp)
+for (( i=0; i<$count; i++ )); do
+    IMAGE_REPOTAGS=( $(jq -r '.[].RepoTags[0]|if .=="<none>:<none>" then .="" else . end' <<< "$imagesjson") )
+done
+t3=$(timer.getTimestamp)
+for (( i=0; i<$count; i++ )); do
+    mapfile -t IMAGE_REPOTAGS < <(jq -r '.[].RepoTags[0]' <<< "$imagesjson")
+    for (( idx=0; idx<"${#IMAGE_REPOTAGS[*]}"; idx++ )); do
+        if [ "${IMAGE_REPOTAGS[$idx]}" = '<none>:<none>' ]; then
+            IMAGE_REPOTAGS[$idx]=''
+        fi
+    done
+done
+t4=$(timer.getTimestamp)
+for (( i=0; i<$count; i++ )); do
+    mapfile -t IMAGE_REPOTAGS < <(jq -r '.[].RepoTags[0]' <<< "$imagesjson")
+    for (( idx=0; idx<"${#IMAGE_REPOTAGS[*]}"; idx++ )); do
+        [ "${IMAGE_REPOTAGS[$idx]}" = '<none>:<none>' ] && IMAGE_REPOTAGS[$idx]=''
+    done
+done
+t5=$(timer.getTimestamp)
+
+timer.logElapsed 'mapfile with jq:if .=="<none>:<none>"' $(( t2 - t1 ))
+echo
+timer.logElapsed 'assignment with jq:if .=="<none>:<none>"' $(( t3 - t2 ))
+echo
+timer.logElapsed 'mapfile with jq; if/then/else' $(( t4 - t3 ))
+echo
+timer.logElapsed 'mapfile with jq; [] && =' $(( t5 - t4 ))
+echo

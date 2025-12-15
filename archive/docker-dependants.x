@@ -1,0 +1,654 @@
+#!/bin/bash
+
+# Many thanks to 'https://github.com/RidiculousRichard' where the original inspiration for this script was found
+# this (re-written) version improves on the original by running about 100 times faster and being easier to understand
+
+# Script to determine what named images and containers are dependent on the specified image (or a containers image) from stdin or in the args
+# An unmatchable input is ignored
+# All of the following will be found:
+#    Any image name / tag / name:tag / id that has a prefix in it that matches the input
+#    Any other image that relies on the images specified
+#    Any containers (running or not) that use any of these images
+
+# Use the Unofficial Bash Strict Mode
+set -o errexit
+set -o nounset
+set -o pipefail
+IFS=$'\n\t'
+
+#declare -r FORCE_COLOR=1
+declare -i IS_LABELS=0 IS_LAYERS=0 IS_REPORT=1 IS_VERBOSE=1
+
+
+set -o noglob
+[ -e ~/bin/trap.bashlib ] && source ~/bin/trap.bashlib
+
+declare -A CONTAINERS CONTAINERS_REF IMAGES IMAGE_LAYERS IMAGE_REF MATCHED_CONTAINER_IDS NAMED_IMAGES SPECIFIED_IMAGE_DEPENDENCIES
+declare -a PARENT_IMAGE_IDS SPECIFIED_IMAGE_IDS SPECIFIED_DOCKER_REFS
+declare CONTAINERSJSON IMAGESJSON
+
+
+#------------------------------------------------------------------------------------------
+function usage()
+{
+    local -i exit_status=${1:-1}
+
+    cat >&2 << EOF
+Usage:
+    $"$( basename "${BASH_SOURCE[0]}" )"  [ -h|--help ] | [ -v|--verbose ] ref.....
+
+    Common options:
+        -h --help              Display a basic set of usage instructions
+        -l --labels            Display labels - hide by default
+           --layers            Display layers - hide by default
+        -r --report            Display report
+        -s --summary           Display more info about progress, containers and images
+        -v --verbose           Display more info about progress, containers and images
+
+Project: https://github.com/ballab1/bin
+
+EOF
+    exit "$exit_status"
+}
+
+#------------------------------------------------------------------------------------------
+function argsParser()
+{
+    local -a args=( "$@" )
+    SPECIFIED_DOCKER_REFS=()
+
+    # Parse command-line options into above variable
+    local -r progname="$( basename "${BASH_SOURCE[0]}" )"
+    local -r longopts='help,Help,HELP,labels,layers,report,summary,verbose'
+    local -r shortopts='Hhlrsv'
+    local -r options=$(getopt --longoptions "${longopts}" --options "${shortopts}" --name "$progname" -- "${args[@]}") || usage $?
+    eval set -- "$options"
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -h|--h|--help|-help)        usage 0;;
+            -H|--H|--HELP|-HELP)        usage 0;;
+                   --Help|-Help)        usage 0;;
+                   --layers)            [ ${IS_LAYERS:-0} == 0 ] && IS_LAYERS=1 || IS_LAYERS=0;     shift 2;;
+            -l|--l|--labels)            [ ${IS_LABELS:-0} == 0 ] && IS_LABELS=1 || IS_LABELS=0;     shift 2;;
+            -r|--r|--report)            [ ${IS_REPORT:-0} == 0 ] && IS_REPORT=1 || IS_REPORT=0;     shift 2;;
+            -s|--s|--summary)           [ ${IS_VERBOSE:-0} == 0 ] && IS_VERBOSE=1 || IS_VERBOSE=0;  shift 2;;
+            -v|--v|--verbose)           [ ${IS_VERBOSE:-0} == 0 ] && IS_VERBOSE=1 || IS_VERBOSE=0;  shift 2;;
+            --)                         shift; SPECIFIED_DOCKER_REFS+=( "$@" );                     break;; 
+            *)                          SPECIFIED_DOCKER_REFS+=( "$1" );                            shift;;
+        esac
+    done
+}
+
+#------------------------------------------------------------------------------------------
+function colorEcho()
+{
+    local color=${1:?"Input parameter 'color' must be passed to 'function ${FUNCNAME[0]}()'"} 
+    shift
+
+    # start_color
+    if [ -t 1 ] || [ "${FORCE_COLOR:-}" ]; then
+        case "$color" in
+            RED)     echo -en '\e[91m';;
+            red)     echo -en '\e[31m';;
+            GREEN)   echo -en '\e[92m';;
+            green)   echo -en '\e[32m';;
+            YELLOW)  echo -en '\e[93m';;
+            yellow)  echo -en '\e[33m';;
+            BLUE)    echo -en '\e[34m';;
+            blue)    echo -en '\e[94m';;
+            MAGENTA) echo -en '\e[95m';;
+            magenta) echo -en '\e[35m';;
+            CYAN)    echo -en '\e[96m';;
+            cyan)    echo -en '\e[36m';;
+            *)       : ;;
+        esac
+    fi
+
+    echo -en "$*"
+
+    # stop_color
+    if [ -t 1 ] || [ "${FORCE_COLOR:-}" ]; then echo -en '\e[0m'; fi
+}
+
+#------------------------------------------------------------------------------------------
+# return all dependents of a given imageId
+function dependantsOf()
+{
+    local imageId=${1:?"Input parameter 'imageId' must be passed to 'function ${FUNCNAME[0]}()'"}
+
+    if [ "${SPECIFIED_IMAGE_DEPENDENCIES[$imageId]:-}" ]; then
+        local dependant
+        local -a dependentImages=()
+        local -A dependentLayers=()
+        for dependant in ${SPECIFIED_IMAGE_DEPENDENCIES[$imageId]}; do
+            if [[ $dependant =~ \[sha256:.+\]=sha256: ]]; then
+                eval "dependentLayers$dependant"
+            else
+                dependentImages+=( "$dependant" )
+            fi
+        done
+        [ ${#dependentImages[*]} -gt 0 ] || return 0
+
+        for dependant in "${dependentImages[@]}"; do
+            while [ "${dependentLayers[$dependant]:-}" ]; do
+                dependant="${dependentLayers[$dependant]}"
+                dependentImages+=( "$dependant" )
+            done
+        done
+        printf '%s\n' "${dependentImages[@]}"
+    fi
+}
+
+#------------------------------------------------------------------------------------------
+function die()
+{
+    local status=$?
+    [ $status -eq 0 ] || echo -ne '\e[31m' >&2
+    echo "$1" >&2
+    [ $status -eq 0 ] || echo -ne '\e[0m' >&2
+    exit $status
+}
+
+#------------------------------------------------------------------------------------------
+# query docker to get all the info about a container
+function dockerContainerInfo()
+{
+    local -r id=${1:?"Input parameter 'id' must be passed to 'function ${FUNCNAME[0]}()'"}
+
+    jq '.[]|select(.Id=="'"$id"'")' <<< "$CONTAINERSJSON"
+}
+
+#------------------------------------------------------------------------------------------
+# query docker to get the current list of .Id and .ParentId
+function dockerImageInfo()
+{
+    local -r id=${1:?"Input parameter 'id' must be passed to 'function ${FUNCNAME[0]}()'"}
+
+    jq '.[]|select(.Id=="'"$id"'")' <<< "$IMAGESJSON"
+}
+
+#------------------------------------------------------------------------------------------
+# query docker to get the current list of .Id and .ParentId
+function dockerImageParents()
+{
+    jq -r '.[]|select(.ParentId != "") | "[\(.Id)]='"'"'\(.ParentId)'"'"'"' <<< "$IMAGESJSON"
+}
+
+#------------------------------------------------------------------------------------------
+function dumpArray()
+{
+    local -n vals="$1"
+
+    for key in "${!vals[@]}";do
+        printf '[%s]="%s"\n' "$key" "${vals[$key]}"  >&2
+    done
+}
+
+#------------------------------------------------------------------------------------------
+function echoImage()
+{
+    local imageId=${1:?"Input parameter 'imageId' must be passed to 'function ${FUNCNAME[0]}()'"}
+    local refId=${2:-}
+
+    if [ -z "$refId" ] || [ "$imageId" = "$refId" ]; then
+        colorEcho 'GREEN' "$imageId"
+    else
+        colorEcho 'green' "$imageId"
+    fi
+}
+
+#------------------------------------------------------------------------------------------
+function echoSHA256()
+{
+    local sha256=${1:?"Input parameter 'sha256' must be passed to 'function ${FUNCNAME[0]}()'"}
+
+    if [ "${sha256:0:7}" = 'sha256:' ]; then
+        colorEcho 'yellow' 'sha256:'; echo -en "${sha256:7}"
+    else
+        echo -en "$sha256"
+    fi
+}
+
+#------------------------------------------------------------------------------------------
+# Check for a matching container
+function findContainers()
+{
+    local -a specifiedDockerRefs=( "$@" )
+
+    # check for info about a specified ref in running containers
+    local i json name ref
+    local -a props
+    for ref in "${specifiedDockerRefs[@]}"; do
+
+        for ((i=0; i<$(jq '.|length' <<< "$CONTAINERSJSON"); i++)); do
+            json=$(jq '.['$i']' <<< "$CONTAINERSJSON")
+            name=$(jq -r '.Names[0]|ltrimstr("/")' <<< "$json")
+            if grep -sE "$ref" &>/dev/null <<< "$json"; then
+                echo "[${name}]='${CONTAINERS[$name]}'" 
+                CONTAINERS_REF[$ref]='#'
+            fi
+        done
+
+    done
+}
+
+#------------------------------------------------------------------------------------------
+# Check for a matching container
+function findImageIds()
+{
+    local -a specifiedDockerRefs=( "$@" )
+
+    # check images for info about a specified parent
+    local ref imageId
+    for ref in "${specifiedDockerRefs[@]}"; do
+
+        for ((i=0; i<$(jq '.|length' <<< "$IMAGESJSON"); i++)); do
+            json=$(jq '.['$i']' <<< "$IMAGESJSON")
+            if grep -sE "$ref" &>/dev/null <<< "$json"; then
+                jq -r '.Id' <<< "$json"
+                IMAGE_REF[$ref]='#'
+            fi
+        done
+
+    done
+}
+
+#------------------------------------------------------------------------------------------
+# Check for a matching container
+function findNamedImage()
+{
+    local -r image=${1:?}
+
+    # check images for info about a specified parent
+    for named_image in "${!NAMED_IMAGES[@]}"; do
+        if [ "${NAMED_IMAGES[$named_image]}" = "$image" ]; then
+            echo "$named_image"
+            return 0
+        fi
+    done
+}
+
+#------------------------------------------------------------------------------------------
+# determine any images which use specified dependents as a layer on which they build
+function getAllImages()
+{
+    [ ${#PARENT_IMAGE_IDS[*]} -eq 0 ] || printf '%s\n' "${PARENT_IMAGE_IDS[@]}"
+    if [ ${#MATCHED_CONTAINER_IDS[*]} -gt 0 ]; then
+        local name image
+        local -a props
+        for name in "${!MATCHED_CONTAINER_IDS[@]}"; do
+            [ "${MATCHED_CONTAINER_IDS[$name]:-}" ] || continue
+            props=( ${MATCHED_CONTAINER_IDS[$name]} )
+            image="${props[1]:-}"
+            [ "${image:-}" ] || continue
+            [ -z "${NAMED_IMAGES[$image]:-}" ] || echo "${NAMED_IMAGES[$image]}"
+        done
+    fi
+}
+
+#------------------------------------------------------------------------------------------
+# determine any images which use specified dependents as a layer on which they build
+function getDependentImages()
+{
+    local imageId=${1:?"Input parameter 'imageId' must be passed to 'function ${FUNCNAME[0]}()'"}
+
+    local parent
+    for parent in "${!IMAGE_LAYERS[@]}"; do
+        [ "$imageId" != "${IMAGE_LAYERS[$parent]}" ] || printf '%s\n' "$parent"
+    done
+}
+
+#------------------------------------------------------------------------------------------
+function getOsId()
+{
+    if [ -e /etc/os-release ]; then
+        grep -e '^ID=' /etc/os-release | awk -F'=' '{ print $2 }' | sed 's|"||g'
+    else
+        echo 'windows'
+    fi
+}
+
+#------------------------------------------------------------------------------------------
+# determine any images which use specified dependents as a layer on which they build
+function populateSpecifiedImageDependencies()
+{
+    local -a specifiedImages=( "$@" )
+
+    local parentId
+    local -a dependents
+    if [ ${#specifiedImages[*]} -gt 0 ]; then
+        for parentId in "${specifiedImages[@]}"; do
+            [ -z "${SPECIFIED_IMAGE_DEPENDENCIES[$parentId]:-}" ] || continue
+
+            mapfile -t dependents < <(getDependentImages  "$parentId")
+            if [ ${#dependents[*]} -gt 0 ]; then
+                SPECIFIED_IMAGE_DEPENDENCIES[$parentId]="${dependents[*]}"
+                printf "[%s]='%s\\n'" "$parentId" "${dependents[*]}"
+                populateSpecifiedImageDependencies "${dependents[@]}"
+            fi
+        done
+    fi
+}
+
+#------------------------------------------------------------------------------------------
+function reportDependentImages()
+{
+    [ $IS_VERBOSE -ne 0 ] || return 0
+
+    local image
+    local -i dependants=0
+    for image in "${!SPECIFIED_IMAGE_DEPENDENCIES[@]}"; do
+        dependants+=$(echo "${SPECIFIED_IMAGE_DEPENDENCIES[$image]}" | wc -l)
+    done
+  
+    verbose "    Detected ${dependants} other layers dependent on specified images"
+}
+
+#------------------------------------------------------------------------------------------
+function reportDistinctImages()
+{
+    [ $IS_VERBOSE -ne 0 ] || return 0
+
+    verbose "    Detected ${#SPECIFIED_IMAGE_IDS[*]} distinct images dependent on specified images"
+    [ ${#SPECIFIED_IMAGE_IDS[*]} -gt 0 ] || return 0
+
+    local image
+    echo -n '      '
+    for image in "${SPECIFIED_IMAGE_IDS[@]}"; do
+        colorEcho 'cyan'  "  ${IMAGES[$image]:-}"
+    done
+    echo
+}
+
+#------------------------------------------------------------------------------------------
+function reportMatchingContainers()
+{
+    [ $IS_VERBOSE -ne 0 ] || return 0
+
+    verbose "    Found ${#MATCHED_CONTAINER_IDS[*]} matching containers"
+    [ ${#MATCHED_CONTAINER_IDS[*]} -gt 0 ] || return 0
+
+    local name
+    echo -n '       '
+    for name in ${!MATCHED_CONTAINER_IDS[@]}; do
+        colorEcho 'cyan' " $name"
+    done
+    echo
+}
+
+#------------------------------------------------------------------------------------------
+function showContainerInfo()
+{
+    local name=${1:?"Input parameter 'name' must be passed to 'function ${FUNCNAME[0]}()'"}
+    shift
+    local -a props=( "$@" )
+
+    colorEcho 'YELLOW' '\nExecuting'; echo -en ' container '; colorEcho 'GREEN' "$name\\n"
+
+    local containerId="${props[0]:-}"
+    local image="${props[1]:-}"
+    local imageId="$(findNamedImage "$image")"
+
+
+    colorEcho 'blue'   'Container Name:   '; echoImage "$name\\n" "$name\\n"
+    colorEcho 'blue'   '            ID:   '; echo "${containerId:-}"
+    colorEcho 'blue'   '         Image:   '; echoImage "${image}\\n" "$image\\n"
+    colorEcho 'blue'   '      Image Id:   '; echoSHA256 "$imageId\\n"
+
+    # add Network info, Volume mounts
+    local json="$(dockerContainerInfo "$containerId")"
+    colorEcho 'blue'   '        Status:   '; echo "$(jq -r '"\(.State): \(.Status)"' <<< "$json")"
+    local network=$(jq '. as $c| $c.NetworkSettings.Networks| to_entries[]| select(.key==$c.HostConfig.NetworkMode)' <<< "$json")
+    colorEcho 'blue'   '       Network:   '; echo "$(jq -r '.key' <<< "$network")"
+    colorEcho 'blue'   '    IP Address:   '; echo "$(jq -r '.value.IPAddress' <<< "$network")"
+
+    echo
+}
+
+#------------------------------------------------------------------------------------------
+function showContainers()
+{
+    [ "${#MATCHED_CONTAINER_IDS[*]}" -gt 0 ] || return 0
+
+    local name
+    for name in "${!MATCHED_CONTAINER_IDS[@]}"; do
+        showContainerInfo "$name" ${MATCHED_CONTAINER_IDS[$name]:-}
+    done
+}
+
+#------------------------------------------------------------------------------------------
+function showImages()
+{
+    echo
+    local imageId
+    for imageId in "${SPECIFIED_IMAGE_IDS[@]}"; do
+        showImageDependents "$imageId"
+        showImageLayers "$imageId"
+        echo
+    done
+}
+
+#------------------------------------------------------------------------------------------
+function showImageDependents()
+{
+    local imageId=${1:?"Input parameter 'imageId' must be passed to 'function ${FUNCNAME[0]}()'"}
+
+    local dependant refImage
+    local -a dependants_found display
+
+
+    refImage="${IMAGES[$imageId]:-}"
+    dependants_found=( $(dependantsOf "$imageId") )
+    if [ -z ${refImage:-} ] || [ ${#dependants_found[*]} -eq 0 ]; then
+        echo -n 'No dependencies found for '; colorEcho 'GREEN' "$refImage\\n"
+        return 0
+    fi
+
+
+    # determine what to display
+    display=()
+    for dependant in "${dependants_found[@]}"; do
+        [ "${IMAGES[$dependant]:-}" ] || continue
+        [ "${IMAGES[$dependant]}" != '<none>:<none>' ] || continue
+        display+=( "$dependant" )
+    done
+
+
+    # report image dependants
+    if [ ${#display[*]} -eq 0 ]; then
+        echo -en 'No images depend on '; colorEcho 'GREEN' "$refImage\\n"
+    else
+        colorEcho 'YELLOW' 'Images'; echo -en ' which '; colorEcho 'cyan' 'depend on '; echoImage "$refImage\\n"
+        for dependant in "${display[@]}"; do
+            showImageInfo "$dependant" "$refImage"
+        done
+    fi
+}
+
+#------------------------------------------------------------------------------------------
+function showImageInfo()
+{
+    local -r image=${1:?"Input parameter 'image' must be passed to 'function ${FUNCNAME[0]}()'"}
+    local -r refImage=${2:?"Input parameter 'image' must be passed to 'function ${FUNCNAME[0]}()'"}
+
+    echo -en "    "
+    echoSHA256 "$image "
+    echoImage "${IMAGES[$image]}\\n" "$refImage\\n"
+
+    if [ "$image" = "$refImage" ]; then
+        showImageLayers "$image"
+        showLabels "$image"
+    fi
+}
+
+#------------------------------------------------------------------------------------------
+function showImageLayers()
+{
+    local image=${1:?"Input parameter 'image' must be passed to 'function ${FUNCNAME[0]}()'"}
+
+    local -i imageCount namedImageCount
+    local id="$image"   
+    image="${IMAGES[$id]:-}"
+    [ "${image:-}" ] || return 0
+
+    # now show what this image depends on
+    imageCount=0
+    namedImageCount=0
+    colorEcho 'YELLOW' 'Layers'; echo -en ' contained in '; colorEcho 'GREEN' "$image\\n"
+
+    while [ "$id" ]; do
+        if [ "${IMAGES[$id]}" = '<none>:<none>' ]; then
+            [ $IS_LAYERS -eq 0 ] || (echo -n '    ' ; echoSHA256 "$id\\n")
+        else
+            (( ++namedImageCount )) || :
+            echo -n '    '; echoSHA256 "$id "
+            echoImage "${IMAGES[$id]}\\n" "$image\\n"
+            local -a digests=( $(dockerImageInfo "$id" | jq -r '.RepoDigests[]|sub("^.*@";"")') )
+            if [ "${#digests[*]}" -gt 0 ]; then
+                colorEcho 'blue' '  RepoDigests:   '; colorEcho 'magenta' "${digests[0]}"'\n'
+                [ "${#digests[*]}" -gt 1 ] && printf '                 \e[35m%s\e[0m\n' "${digests[@]:1}"
+            fi
+            [ $IS_LABELS -eq 0 ] && [ "${IMAGES[$id]}" != "$image" ] || showLabels "$id"
+        fi
+        (( ++imageCount )) || :
+        id="${IMAGE_LAYERS[$id]:-}"
+    done
+
+    echo -n '    '
+    echoImage "$image"
+    echo -en ' contains '
+    colorEcho 'cyan' "${namedImageCount} named images"
+    echo -en ' in a total of '
+    colorEcho 'cyan' "${imageCount}"' layers\n'
+}
+
+#------------------------------------------------------------------------------------------
+function showLabels()
+{
+    local image=${1:?"Input parameter 'image' must be passed to 'function ${FUNCNAME[0]}()'"}
+
+
+    local -a labels=( $(docker inspect "$image" |  jq -r 'try .[].Config.Labels | to_entries[] | "\(.key)=\(.value)"') )
+    [ ${#labels[*]} -gt 0 ] || return 0
+
+    colorEcho 'blue'   '       Labels:   '; echo "${labels[0]}"
+
+    local -a refs=()
+    local -i idx=-1
+    for (( i=${#labels[*]}-1; i>=0; i-- )); do
+        if [[ "${labels[i]:-}" == 'container.git.refs=('* ]]; then
+            idx=$i
+        elif [[ "${labels[i]:-}" == ' '* ]]; then
+            refs+=( "${labels[i]}" )
+            unset labels[i]
+            [ $idx -gt 0 ] && (( --idx ))
+        fi
+    done
+    [ ${#refs[*]} -gt 0 ] && labels[$idx]=${labels[$idx]}$(printf ',%s' "${refs[@]}")
+    printf '                 %s\n' "${labels[@]:1}"
+}
+
+#------------------------------------------------------------------------------------------
+function showReport()
+{
+    local -a specifiedDockerRefs=( "$@" )
+
+    echo
+    showContainers
+    showImages
+}
+
+#------------------------------------------------------------------------------------------
+function verbose()
+{
+    [ $IS_VERBOSE -ne 0 ] || return 0
+    if [ $# -gt 0 ]; then
+        echo -e "$*"  >&2
+    fi
+}
+
+#------------------------------------------------------------------------------------------
+#
+#  MAIN
+#
+#------------------------------------------------------------------------------------------
+
+declare start=$(date +%s)
+
+# get input from commandline
+argsParser "$@"
+
+
+# Check there is some input
+[ ${#SPECIFIED_DOCKER_REFS[*]} -gt 0 ] || die 'Nothing specified to search for; images/containers must be specified as either args or on the stdin'
+verbose "Searching for information on: $(printf ' %s' "${SPECIFIED_DOCKER_REFS[*]}")"
+
+
+# need to use docker Rest API to get JSON for all containers/images
+CONTAINERSJSON="$(curl --silent --unix-socket /var/run/docker.sock http://localhost/containers/json?all='true')"
+readonly CONTAINERSJSON
+IMAGESJSON="$(curl --silent --unix-socket /var/run/docker.sock http://localhost/images/json?all='true')"
+readonly IMAGESJSON
+
+
+
+# Populate the image info hash
+eval "IMAGES=( $(jq -r '.[]|"[\(.Id)]=\"\(.RepoTags[0])\""' <<< "$IMAGESJSON") )"
+verbose "    Detected ${#IMAGES[*]} images/layers"
+
+# Populate the named image info hash
+NAMED_IMAGES=()
+for id in "${!IMAGES[@]}"; do
+    [ "${IMAGES[$id]}" = '<none>:<none>' ] || NAMED_IMAGES[${IMAGES[$id]}]="$id"
+done
+verbose "    Detected ${#NAMED_IMAGES[*]} named images"
+
+
+# Populate the container info hash
+eval "CONTAINERS=( $( jq -r '.[]|"[\(.Names[0]|ltrimstr("/"))]=\"\(.Id)\n\"\(.Image)"' <<< "$CONTAINERSJSON") )"
+verbose "    Detected ${#CONTAINERS[*]} containers"
+
+
+# determine any containers coresponding to specified dependents
+eval "MATCHED_CONTAINER_IDS=( $(findContainers "${SPECIFIED_DOCKER_REFS[@]}") )"
+reportMatchingContainers 
+
+
+
+# determine the image IDs coresponding to specified dependents
+mapfile -t PARENT_IMAGE_IDS < <(findImageIds "${SPECIFIED_DOCKER_REFS[@]}")
+[ ${#PARENT_IMAGE_IDS[*]} -eq 0 ] && [ ${#MATCHED_CONTAINER_IDS[*]} -eq 0 ] && die 'No parent images or containers found'
+verbose "    Detected ${#MATCHED_CONTAINER_IDS[*]} containers of dependents"
+verbose "    Detected ${#PARENT_IMAGE_IDS[*]} images associated with specified references"
+
+
+
+
+# find the parent ids of all images
+eval "IMAGE_LAYERS=( $(dockerImageParents) )"
+verbose "    Retrieved ${#IMAGE_LAYERS[*]} parented layers"
+
+
+
+# Deduplicate parent image ids & matched container ids
+mapfile -t SPECIFIED_IMAGE_IDS < <(getAllImages | LC_ALL=C sort -u ||:)
+reportDistinctImages
+
+
+
+# determine any images which use specified dependents as a layer on which they build
+SPECIFIED_IMAGE_DEPENDENCIES=()
+eval "SPECIFIED_IMAGE_DEPENDENCIES=( $(populateSpecifiedImageDependencies "${SPECIFIED_IMAGE_IDS[@]}") )"
+#reportDependentImages
+echo
+
+
+# report what we have discovered
+[ $IS_REPORT -eq 0 ] || showReport "${SPECIFIED_DOCKER_REFS[@]}"
+
+
+declare finish=$(date +%s)
+declare -i elapsed=$(( finish - start ))
+printf '\nTime elapsed: %02d:%02d:%02d\n'  $((elapsed / 3600)) $((elapsed % 3600 / 60)) $((elapsed % 60))
+exit 0

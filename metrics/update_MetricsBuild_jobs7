@@ -1,0 +1,11 @@
+#!/bin/bash
+
+declare -r PERFORM_UPDATE=${1:-'false'}
+declare -r JOBS_DEFINITION_FILE='/emc/ballab1/Downloads/jenkins/jobs3.txt'
+declare -r XML_PATH='//publishers/hudson.tasks.ArtifactArchiver'
+declare -r GIT_ARG='/emc/ballab1/Downloads/jenkins/publisher.xml'
+declare -r ACCUREV_ARG='/emc/ballab1/Downloads/jenkins/publisher.xml'
+
+# locate main script
+declare -r UPDATE_JOBS="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+. "${UPDATE_JOBS}/update_jobs"

@@ -1,0 +1,46 @@
+[user]
+    name = Ballantyne, Bob
+    email = ballantyne.robert@gmail.com
+[include]
+    path = ~/.enterprise/config.include
+[credential]
+    username = ballab1
+    helper = cache --timeout=999999
+    modalPrompt = false
+[alias]
+    lg1 = log -n 20 --graph --abbrev-commit --decorate --all --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(bold yellow)%d%C(reset)'
+    lg2 = log -n 20  --graph --abbrev-commit --decorate --all --format=format:'%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(bold yellow)%d%C(reset)%n''          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)'
+    lg3 = log -n 20 --graph --abbrev-commit --decorate --first-parent --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(bold yellow)%d%C(reset)' .
+    lg = !"git lg3"
+    co = checkout
+    foreach = submodule foreach
+
+[core]
+    symlinks = true
+    editor = vim
+    branch = main
+[push]
+    default = simple
+
+[http]
+    sslVerify = false
+
+[winUpdater]
+    recentlySeenVersion = 2.20.1.windows.1
+
+[hub]
+    protocol = https
+    host = github.com
+
+[url "https://github.com/ballab1"]
+    pushInsteadOf = https://github.com/ballab1
+
+[url "git@github.com/ballab1"]
+    pushInsteadOf = git@github.com/ballab1
+   
+[init]
+    defaultBranch = main
+[safe]
+    directory = ~/.inf
+	directory = /home/bobb/production/workspace.production/jenkins/jenkins_home/workspace
+	directory = /home/bobb/production/workspace.production/jenkins/jenkins_home/workspace/Update directories - secrets

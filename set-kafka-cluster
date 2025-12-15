@@ -1,0 +1,67 @@
+# Usage: source ~/bin/set-kafka-cluster dev|dur|hop|local|home
+
+function hop_config()
+{
+    # Hopkinton cluster -- Vijay Basava  10gb Optical SLICS
+    # root / ChangeM3!
+    KAFKA_AVRO_HOSTS=kafkaavrosch01
+    KAFKA_BOOTSTRAP_SERVERS=kafkabroker01.cec.lab.emc.com:9092,kafkabroker02.cec.lab.emc.com:9092,kafkabroker03.cec.lab.emc.com:9092
+    KAFKA_CLUSTER='hop'
+    ZOOKEEPER_HOSTS=kafkazookpr01.cec.lab.emc.com:32181,kafkazookpr02.cec.lab.emc.com:32181
+}
+
+function dur_config()
+{
+    # Durham cluster -- Steve Vedell RITM0259942
+    #        broker1.cec.lab.emc.com  (10.207.113.56)
+    #        broker2.cec.lab.emc.com  (10.207.113.53)
+    #        broker3.cec.lab.emc.com  (10.207.113.55)
+    #        zookeeper.cec.lab.emc.com  (10.207.113.52)
+    #        zookeeper2.cec.lab.emc.com  (10.207.113.54)
+    #        avro-schema.cec.lab.emc.com  (10.207.113.50)
+    KAFKA_AVRO_HOSTS=avro-schema.cec.lab.emc.com
+    KAFKA_BOOTSTRAP_SERVERS=broker1.cec.lab.emc.com:9092,broker2.cec.lab.emc.com:9092,broker3.cec.lab.emc.com:9092
+    KAFKA_CLUSTER='dur'
+    ZOOKEEPER_HOSTS=zookeeper.cec.lab.emc.com:2181,zookeeper2.cec.lab.emc.com:2181
+}
+
+function dev_config()
+{
+    dev_cluster=10.244.102.59
+    KAFKA_AVRO_HOSTS=${dev_cluster}
+    KAFKA_BOOTSTRAP_SERVERS=${dev_cluster}:9092
+    KAFKA_CLUSTER='dev'
+    ZOOKEEPER_HOSTS=${dev_cluster}:2181
+}
+
+function local_config()
+{
+    KAFKA_AVRO_HOSTS=localhost
+    KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+    KAFKA_CLUSTER='localhost'
+    ZOOKEEPER_HOSTS=localhost:2181
+}
+
+function usage()
+{
+    echo ""
+    echo "Usage: source ~/bin/set-kafka-cluster dev|dur|hop|local"
+    echo ""
+}
+
+case "$1" in
+    hop)     hop_config;;
+    dur)     dur_config;;
+    dev)     dev_config;;
+    local) local_config;;
+    help)         usage;;
+    *)            usage;;
+esac
+
+
+export KAFKA_AVRO_HOSTS
+export KAFKA_BOOTSTRAP_SERVERS
+export KAFKA_CLUSTER
+export ZOOKEEPER_HOSTS
+declare -r tools="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" 
+"${tools}/show-kafka-cluster"

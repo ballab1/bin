@@ -1,0 +1,11 @@
+#!/bin/bash
+
+declare -r PERFORM_UPDATE=${1:-'false'}
+declare -r JOBS_DEFINITION_FILE
+declare -r XML_PATH='//builders/hudson.tasks.Shell/command'
+declare -r GIT_ARG='/emc/ballab1/Downloads/jenkins/runCmd.GIT.sh'
+declare -r ACCUREV_ARG='/emc/ballab1/Downloads/jenkins/runCmd.ACCUREV.sh'
+
+# locate main script
+declare -r UPDATE_JOBS="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+. "${UPDATE_JOBS}/update_jobs"

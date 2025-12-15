@@ -1,0 +1,84 @@
+#!/bin/bash
+
+# Use the Unofficial Bash Strict Mode
+set -o errexit
+set -o nounset
+set -o pipefail
+IFS=$'\n\t'
+[ ! -e ~/bin/trap.bashlib ] || source ~/bin/trap.bashlib
+
+function services()
+{
+    local -r dc_yaml="${1:?'no docker-compose.yml specified'}"
+
+    python -c 'import sys, yaml, json; json.dump(yaml.load(sys.stdin), sys.stdout, indent=4)' < "$dc_yaml" | jq '.services|keys[]' | tr -d '"'
+}
+
+declare prod_dir=${1:-$(pwd)}
+[ -d "$prod_dir" ] || trap.die 'Invalid directory specified'
+
+export CONTAINER_TAG=${CONTAINER_TAG:-latest}
+declare -r containerOS="$(< container.os )"
+export CONTAINER_OS="$containerOS"/
+
+cd versions
+git checkout "$CONTAINER_TAG"
+git pull
+source "$containerOS"
+cd ..
+
+
+declare dc_yaml="${prod_dir}/docker-compose.${CONTAINER_TAG}.yml"
+[ -f "$dc_yaml" ] || trap.die "Invalid directory - no $dc_yaml"
+
+
+declare container line
+declare -a containers lines
+mapfile -t containers < <(services "$dc_yaml")
+
+echo "docker-compose -f $dc_yaml down"
+docker-compose -f "$dc_yaml" down
+set -o verbose
+sudo find -L vols/log -type f ! -name '.*' -delete
+
+
+set +o verbose
+docker-compose -f "$dc_yaml" pull
+rmOldContainers 'no_report'
+echo "docker-compose -f $dc_yaml up -d"
+docker-compose -f "$dc_yaml" up -d
+
+declare -A finished=( )
+for container in "${containers[@]}"; do
+    case "$container" in
+        mysql|blue|grafana) finished[$container]='0' ;;
+    esac
+done
+
+declare -a lines=()
+declare container line
+while [ ${#finished[*]} -lt ${#containers[*]} ]; do
+    sleep 4
+    lines=()
+    for container in "${containers[@]}"; do
+        case "$container" in
+            mysql|blue|grafana) continue ;;
+        esac
+
+        declare text="$(docker logs "${container,,}" 2>&1 | grep -s "Finished executing startup" || :)"
+        [ -z "$text" ] && continue
+        [ "${finished[${container,,}]:-}" ] && continue
+        finished[${container,,}]="$text"
+        lines+=( "$(sed -Ee 's|^.+Finished executing startup scripts after ||' <<< "$text" | awk -F ':' '{ print ((($1 * 60) + $2) * 60) + $3 }')_${container,,}" )
+    done
+    for line in $(printf '%s\n' "${lines[@]}" | sort -t '_' -k 1n,2); do
+        container="${line##*_}"
+        echo "${finished[${container,,}]}"
+    done
+done
+
+declare run_log="${prod_dir}/run.log"
+:> "$run_log"
+for container in "${containers[@]}"; do
+    docker logs "$container" >> "$run_log" 2>&1
+done

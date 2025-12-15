@@ -1,0 +1,38 @@
+[ -d ~/GIT/other/bash_unit ] && export BASH_UNIT_ROOT=$( readlink -f ~/GIT/other/bash_unit )
+[ -d ~/GIT/other/bats_root ] && export BATS_ROOT=$( readlink -f ~/GIT/other/bats_root )
+[ -d ~/.tmux/tmp ] && export TMUX_TMPDIR=$( readlink -f ~/.tmux/tmp ) 
+
+export DOCKER_REGISTRY=registry.ubuntu.home/
+export GITHUB_HOST=github.com
+export GITHUB_USER=ballab1
+export HUB_PROTOCOL=https
+#export HUB_VERBOSE=1
+export GRADLE_USER_HOME=$HOME
+
+export KAFKA_CLUSTER='home'
+#export KAFKA_AVRO_HOSTS=s3.ubuntu.home,s7.ubuntu.home,s8.ubuntu.home
+export KAFKA_BOOTSTRAP_SERVERS=s3.ubuntu.home:9092,s7.ubuntu.home:9092,s8.ubuntu.home:9092
+export ZOOKEEPER_HOSTS=s3.ubuntu.home:2181,s7.ubuntu.home:2181,s8.ubuntu.home:2181
+   
+
+export GIT_PS1_SHOWDIRTYSTATE=1
+export GIT_PS1_SHOWSTASHSTATE=1
+export GIT_PS1_SHOWUNTRACKEDFILES=1
+#export GIT_PS1_SHOWUPSTREAM='auto'
+export GIT_PS1_SHOWCOLORHINTS='true'
+export GIT_PS1_DESCRIBE_STYLE='tag'
+PROMPT_COMMAND='__git_ps1 "\\[\\e[1;32m\\]\u@\h\\[\\e[0m\\] \\[\\e[1;33m\\]\w\\[\\e[0m\\]" "\\n\\\$ "'
+
+#PROMPT_COMMAND='__git_ps1 "\u@\h:\w" "\\\$ "'
+#PS1='\[\e[1;32m\]\u@\h\[\e[0m\] \[\e[1;33m\]\w\[\e[0m\] $(__git_ps1 "(%s)")\n\$ ' 
+#export PS4='+${BASH_SOURCE}: ${LINENO}: ${FUNCNAME[0]:-}(): }'
+
+#GIT_PS1_SHOWDIRTYSTATE=1 
+#GIT_PS1_SHOWSTASHSTATE=1 
+#GIT_PS1_SHOWUNTRACKEDFILES=1 
+#GIT_PS1_SHOWUNTRACKEDFILES=1 
+#GIT_PS1_SHOWCOLORHINTS=1 
+
+[ -d ~/.inf ] && export CFG_USER_SECRETS=$( readlink -f ~/.inf )
+[ -f ~/.inf/secret.properties ] && export __SECRETS_FILE=~/.inf/secret.properties
+[ -f ~/.kube/config ] && export KUBECONFIG=~/.kube/config

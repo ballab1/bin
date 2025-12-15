@@ -1,0 +1,26 @@
+#!/usr/bin/python3
+
+# https://www.pythonforbeginners.com/basics/convert-ini-files-to-json-format-in-python#htoc-convert-ini-file-to-json-file-in-python
+
+import argparse
+import configparser
+import json
+
+# parse any command line arguments
+p = argparse.ArgumentParser(description='', formatter_class=argparse.RawDescriptionHelpFormatter)
+p.add_argument('references', nargs=argparse.REMAINDER, help='one or more ini references for which info is to be displayed')
+args = p.parse_args()
+for ref in args.references:
+    config_object = configparser.ConfigParser()
+    file = open(ref,"r")
+    config_object.read_file(file)
+    output_dict=dict()
+    sections=config_object.sections()
+    for section in sections:
+        items = config_object.items(section)
+        output_dict[section]=dict(items)
+
+    with open("/dev/stdout", "w") as f:
+        json.dump(output_dict, f)
+
+    file.close()

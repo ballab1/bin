@@ -1,0 +1,44 @@
+#!/bin/bash
+
+declare -r tools="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+. "${tools}/bashFunctions2"
+
+function main()
+{
+    local -r merlin=$1
+    local -r harrier=$2
+    local -r xmlpath=$3
+    local -r job_file=$4
+    local -t doupdate=$5
+    local FN_editXML=$6
+    [[ -z "$FN_editXML" ]] && FN_editXML='editXML'
+
+    local job
+    while read job; do
+      [[ -z "$job" ]] && continue
+
+      getXML "${job}"
+      if [[ "$job" == 'Merlin'* ]]; then
+          "$FN_editXML" "${job}" "$xmlpath" "$( getReplacement "$job" "$xmlpath" "$merlin" )"
+#      elif [[ "$job" == 'Harrier'* ]]; then
+#          "$FN_editXML" "${job}" "$xmlpath" "$( getReplacement "$job" "$xmlpath" "$harrier" )"
+      else
+          "$FN_editXML" "${job}" "$xmlpath" "$( getReplacement "$job" "$xmlpath" "$harrier" )"
+      fi
+      if [[ "$doupdate" == 'true' ]]; then
+          echo "Updating:  ${job}"
+          putXML "${job}"
+      else
+          echo "Testing:  ${job}"
+      fi
+    done < <(listJobs "$job_file")
+}
+
+trap catch_error ERR
+trap catch_int INT
+trap catch_pipe PIPE
+
+main "$ACCUREV_ARG" "$GIT_ARG" "$XML_PATH" "$JOBS_DEFINITION_FILE" "$PERFORM_UPDATE" "$EDIT_XML_FN"
+echo 'done'
+
+exit 0

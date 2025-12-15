@@ -1,0 +1,527 @@
+#!/bin/bash
+
+set -o errexit
+set -e
+
+##############################################
+# Environment variables supported
+##############################################
+# ACCUREV_PWD
+# ACCUREV_USR
+# BASH_SOURCE
+# CFG_AUTO_BUILDENV        1
+# CFG_BUILDENV             'wschroot' 
+# CFG_BUILDENV_SCRIPT      '/c4shares/auto/devutils/bin/gosp3-noNetwork' 
+# CFG_CHROOT_SCRIPT        '/c4shares/auto/devutils/bin/nosp'
+# CFG_CLEAN                1
+# CFG_MONITOR_CPU          1
+# CFG_MONITOR_DISK         1
+# CFG_MONITOR_MEMORY       1
+# CFG_MONITOR_NFS_CLIENT   1
+# CFG_MONITOR_NFS_SERVER   1
+# CFG_USE_CCACHE
+# DB_PORT                  5432
+##############################################
+
+
+## only ever define READ-ONLY vars in global scope
+
+declare -r TOOLS="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )" 
+declare -r CSV_COMPONENT='component.csv'
+declare -r CSV_CPU='cpu.csv'
+declare -r CSV_DISK='disk.csv'
+declare -r CSV_EVENT='event.csv'
+declare -r CSV_MEMORY='memory.csv'
+declare -r CSV_META='metadata.csv'
+declare -r CSV_WARNINGS='warnings.csv'
+declare -r SHARE_BASE='/net/ci-server-18.usd.lab.emc.com/build_artifacts/ReferenceBuilds'
+declare -r REPORT_CSV="${SHARE_BASE}/reference_builds.csv"
+declare -r REPORT2_CSV="${SHARE_BASE}/reference_builds2.csv"
+
+declare -r PORT=${DB_PORT:-5432}
+declare -r PSQL="psql -p ${PORT} -v ON_ERROR_STOP=1"
+
+# global exceptions
+declare -i dying=0
+declare -i pipe_error=0
+
+
+#----------------------------------------------------------------------------
+# Exit on any error
+function catch_error() {
+    echo "ERROR: an unknown error occurred at $BASH_SOURCE:$BASH_LINENO" >&2
+}
+
+#----------------------------------------------------------------------------
+# Detect when build is aborted
+function catch_int() {
+    die "${BASH_SOURCE[0]} has been aborted with SIGINT (Ctrl-C)"
+}
+
+#----------------------------------------------------------------------------
+function catch_pipe() {
+    pipe_error+=1
+    [[ $pipe_error -eq 1 ]] || return 0
+#    if ! ( echo "INFO: Testing stdout pipe" ); then
+#        if [[ $logfile_redirect -ne 0 && $logfile_out ]]; then
+#            exec >>"$logfile_out"
+#            ( echo "ERROR: ${BASH_SOURCE[0]} has been aborted with SIGPIPE (broken pipe)" ) || :
+#        fi
+#    fi
+#    if ! ( echo "INFO: Testing stderr pipe" >&2 ); then
+#        if [[ $logfile_redirect -ne 0 && $logfile_err ]]; then
+#            exec 2>>"$logfile_err"
+#            ( echo "ERROR: ${BASH_SOURCE[0]} has been aborted with SIGPIPE (broken pipe)" >&2 ) || :
+#        fi
+#    fi
+    [[ $dying -eq 0 ]] || return 0
+    die "${BASH_SOURCE[0]} has been aborted with SIGPIPE (broken pipe)"
+}
+
+#----------------------------------------------------------------------------------------------
+# Check boolean value
+function check()
+{
+    if [[ $1 == true ]]; then
+        echo 1
+    elif [[ $1 == false ]]; then
+        echo 0
+    fi
+}
+
+#----------------------------------------------------------------------------------------------
+function cleanUpShare_fake()
+{
+    local -r shareFolderName=$1
+
+    #noop
+}
+
+#----------------------------------------------------------------------------------------------
+function cleanUpShare_live()
+{
+    local -r shareFolderName=$1
+    
+    [[ -e "$shareFolderName" ]] && rm -rf "$shareFolderName"
+}
+
+#----------------------------------------------------------------------------------------------
+function copyToShare()
+{
+    local -r share_dir=$1
+    local -r csv_file=$2
+    local -r no_copy=$3
+
+    local -r filename="$( basename "$csv_file" )"
+    local -r share_file="${share_dir}/${filename}"
+    [[ "$no_copy" ]] || cp "$csv_file" "$share_file"
+    
+    echo "'$share_file'"
+}
+
+#----------------------------------------------------------------------------
+function die() {
+    local status=$?
+    [[ $status -ne 0 ]] || status=255
+    dying+=1
+
+    printf "%s\n" "FATAL ERROR" "$@" >&2
+    exit $status
+} 
+
+#----------------------------------------------------------------------------------------------
+function findAccurevTxn()
+{
+    local -r stream=$1
+    local -r key=$2
+ 
+    ibid --search --build_stream "$stream" "$key" | grep transaction | awk '{ print $2 }'
+}
+
+#----------------------------------------------------------------------------------------------
+function generateBuildMetaData()
+{
+    local -r sys_date_time=$1
+    local -r prod_type=$2
+    local -r ip=$3
+    local -r flavor=$4
+    local -r stream=$5
+    local -r build_txn=$6
+    local -r cache_cfg=$7
+    local -r number_of_cpu=$8
+    local -r allocated_memory=$9
+    local -r opfile=${10}
+    local -r ba_version=${11}
+    local -r build_type=${12}
+    
+    # Following is sample exampleof output
+    #Time,Type,Flavor,"build_all version",Stream,Transaction,ccache_enabled,ipAddress,"Number of CPUs","Allocated Memory","Build Type"
+    #2016-08-08 08:23:00-04,KH,DEBUG,1,upc-nextunity-platform-cs,8164982,true,10.244.91.234,16,17246978048,FULL_BUILD
+
+    # Put all the data in csv
+    local -r dir="$( dirname "$opfile" )"
+    mkdir -p "$dir" || die  "Unable to create directory $dir"
+
+    [[ -e "opfile" ]] && rm "$opfile" 
+    touch "$opfile"
+    printf "%s\n" Time Type Flavor "\"build_all version\"" Stream Transaction ccache_enabled ipAddress "\"Number of CPUs\"" "\"Allocated Memory\"" "\"Build Type\"" | paste -sd ',' >> "$opfile"
+    printf "%s\n" "$sys_date_time" "$prod_type" "$flavor" "$ba_version" "$stream" "$build_txn" "$cache_cfg" "$ip" "$number_of_cpu" "$allocated_memory" "$build_type" | paste -sd ',' >> "$opfile"
+}
+
+#----------------------------------------------------------------------------------------------
+function getAccurevTxn()
+{
+    local -r stream=$1
+    local -r transaction_id=$2
+
+    # Gather transaction information
+    local build_txn
+    case $transaction_id in
+        ''|'LGB'|'lgb') build_txn=$( findAccurevTxn "$stream" --lgb ) ;;
+           'LGT'|'lgt') build_txn=$( findAccurevTxn "$stream" --lgt ) ;;
+                 '^-+') die "Invalid transaction '${build_txn}' specified for stream: ${stream}" ;;
+         'HEAD'|'head') build_txn=$(accurev hist -fx -t highest -s "$stream" | xml sel -t -m '//transaction[@id]' -v '@id') ;;
+            '^[0-9]+$') {
+           build_txn=$(accurev hist -fx -t highest -s "$stream" | xml sel -t -m '//transaction[@id]' -v '@id')
+           [[ $transaction_id -gt $build_txn ]] && die "Specified transaction '${build_txn}' does not exist in stream: ${stream}"
+           } ;;
+        *) die "Unknown transaction '${build_txn}' for stream: ${stream}" ;;
+    esac
+    [[ $build_txn =~ ^[-]?[0-9]+$ ]] || die "Unable to determine transaction '${build_txn}' for stream: ${stream}"
+    echo "$build_txn"
+}
+
+#----------------------------------------------------------------------------------------------
+function getDefaultUser()
+{
+    local user
+    for user in "$USERNAME" "$ACCUREV_USR" "$USER" 'svc_ctdciauto'
+    do
+        [[ "${!user}" ]] && break
+    done
+    [[ "$user" == svc_ctdciauto  &&  "$ACCUREV_USR"  &&  "$ACCUREV_PWD" ]] && user="$ACCUREV_USR"
+    export USERNAME="$user"
+    
+    echo "$user"
+}
+
+#----------------------------------------------------------------------------------------------
+function getFullyQualifiedDomainName()
+{
+    local -r host=$1
+  
+#    ( nslookup "$host" | grep 'Name:' | tail -1 | awk '{ print $2 }' )
+    ( hostname -f )
+}
+
+#----------------------------------------------------------------------------------------------
+function getGitCommit()
+{
+    local -r repo=$1
+    local -r branch_id=$2
+    
+    local build_txn=$( git rev-parse "refs/remotes/origin/${branch_id}^{commit}" )
+    echo "$build_txn"
+}
+
+#----------------------------------------------------------------------------------------------
+function getHost()
+{
+    (uname -n)
+}
+
+#----------------------------------------------------------------------------------------------
+function getIPaddress()
+{
+    (/sbin/ifconfig eth0 | grep inet | cut -f 2 -d ":" | cut -f 1 -d " ")
+}
+
+#----------------------------------------------------------------------------------------------
+function getNumCPUs()
+{
+    (nproc --all) # or grep -c (processor /proc/cpuinfo)
+}
+
+#----------------------------------------------------------------------------------------------
+function getMemorySize()
+{
+    local -r allocated_memory="$(grep MemTotal /proc/meminfo | awk '{print $2}')"
+    echo "$(( allocated_memory*1024 ))"
+}
+
+#----------------------------------------------------------------------------------------------
+function getShareFolderName()
+{
+    local -r host=$1
+    local -r buildid=${2:-'00001'}
+    
+    local shareFolderName="${SHARE_BASE}/${host}/${buildid}"
+    mkdir -p "$shareFolderName" || die "Unable to create directory '$shareFolderName' to save metrics information"
+    
+    echo "$shareFolderName"
+}
+
+#----------------------------------------------------------------------------------------------
+function getSysDateTime()
+{
+    (date +"%F %T%:::z")
+}
+
+#----------------------------------------------------------------------------------------------
+function initAccuRevWorkspace()
+{
+    local -r stream=$1
+    local -r user=$2
+    local -r password=$3
+
+    # Ensure AccuRev login
+    if accurev info 2>/dev/null | grep -q 'Principal:.*not logged in'; then
+        [[ $user && $password ]] || die "Not logged into AccuRev, and login information not provided"
+        accurev login -n "$user" "$password" || die "AccuRev login failure"
+        accurev info 2>/dev/null | grep -q 'Principal:.*not logged in' && die "AccuRev login failed"
+    fi
+}
+
+#----------------------------------------------------------------------------------------------
+function initGitWorkspace()
+{
+    local -r repo=$1
+    local -r user=$2
+    local -r password=$3
+    
+    # commands obtained from Jenkins console output
+    git init '.'
+    git config --local credential.helper environ || die "Failed to set credential helper"
+    git -c core.askpass=true fetch --tags --progress "$repo" '+refs/heads/*:refs/remotes/origin/*'
+    git config remote.origin.url "$repo" # timeout=10
+    git config --add remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*' # timeout=10
+    git config remote.origin.url "$repo" # timeout=10
+    git -c core.askpass=true fetch --tags --progress "$repo" '+refs/heads/*:refs/remotes/origin/*'
+#    git config core.sparsecheckout # timeout=10
+}
+
+#----------------------------------------------------------------------------------------------
+function populateAccuRevWorkspace()
+{
+    local -r stream=$1
+    local -r flavor=$2    
+    local build_txn=$3
+    local comps=$4
+    
+    [[ $comps == 'all' ]] || comps='kittyhawk-all'
+    [[ $build_txn =~ ^[-+]?[0-9]+$ ]] && build_txn="--transaction=${build_txn}"
+    
+    echo "build setting for GNOSIS_$flavor"
+    for build_counter in {1..6}
+    do
+        echo "Preparing workspace ..."
+        ws pop --noprepare --nospinner --stream="$stream" --target "GNOSIS_${flavor}" "$build_txn" "$comps"
+        local result=$?
+
+        # Prepare workspace
+        if [[ ${result} == 1 ]]; then
+            [[ $build_counter -eq 6 ]] && die "Unable to prepare workspace $build_dir after $build_counter attempts."
+            echo "Attempt $build_counter"
+            removeOldWorkspace "$build_dir"
+            continue
+        fi
+        break;
+    done
+}
+
+#----------------------------------------------------------------------------------------------
+function populateGitWorkspace()
+{
+    local repo=${1:-''}
+    local flavor=${2:-''}
+    local commitid=$3
+    local -r components=$4
+
+    GIT_LFS_SKIP_SMUDGE=1 git checkout -q -f "$commitid" --
+    git lfs pull
+}
+
+#----------------------------------------------------------------------------------------------
+function removeOldWorkspace()
+{
+    local -r build_dir=$1
+
+    cd "$TOOLS"   # make sure we are not in $Build_dir when it gets deleted
+
+    #clean used workspace
+    if [[ -e "$build_dir" ]]; then
+        #remove buildenv for next run
+        sudo rm -rf "$build_dir/.buildenv"
+        sudo rm -rf "$build_dir"  || die "Failed to remove old version of workspace from $build_dir"
+    fi
+
+    # Create required directories    
+    local -r perms="$(id -u):$(id -g)"
+    local dir
+    for dir in "$build_dir"; do
+        [[ -w $dir ]] && continue
+        if ! mkdir -p "$dir"; then
+            sudo mkdir -p "$dir" || die "Unable to create directory $dir"
+            sudo chown "$perms" "$dir" || die "Failed to set permissions on $dir"
+        fi
+    done
+
+    cd "$build_dir" || die "Failed to change directory to $build_dir"
+}
+
+#----------------------------------------------------------------------------------------------
+function reportCSVupdates()
+{
+    local -r shareFolderName=$1
+    local -r slave=$2
+    local -r report=$3
+    
+    if [[ -e "$shareFolderName" ]]; then
+      
+      # date,slave,buildnum,component,cpu,disk,event,memory,metadata,warnings,folder
+
+      local -r sysdate="$( getSysDateTime )"
+      local -r buildnum=$( basename "$shareFolderName" )
+      local -r component=$( wc -l < "${shareFolderName}/${CSV_COMPONENT}" )
+      local -r cpu=$( wc -l < "${shareFolderName}/${CSV_CPU}" )
+      local -r disk=$( wc -l < "${shareFolderName}/${CSV_DISK}" )
+      local -r event=$( wc -l < "${shareFolderName}/${CSV_EVENT}" )
+      local -r memory=$( wc -l < "${shareFolderName}/${CSV_MEMORY}" )
+      local -r metadata=$( wc -l < "${shareFolderName}/${CSV_META}" )
+      local -r warnings=$( wc -l < "${shareFolderName}/${CSV_WARNINGS}" )
+
+      [[ -e "$report" ]] || printf "%s\n" 'date,slave,buildnum,component,cpu,disk,event,memory,metadata,warnings,folder' > "$report"
+      printf "%s\n" "$sysdate" "$slave" "$buildnum" "$component" "$cpu" "$disk" "$event" "$memory" "$metadata" "$warnings" "\"${shareFolderName}\"" | paste -sd ',' >> "$report"
+    fi
+}
+
+#----------------------------------------------------------------------------------------------
+function runBuild()
+{
+    # Run the build
+    local -r build_dir=$1
+    local comps=$2
+    local -r cache_cfg=$3
+    
+    
+    [[ -e "$build_dir" ]] || die "Invalid build workspace defined: '$build_dir'"
+    [[ -e "$build_dir/build/build_all" ]] || die "build_all not found in build workspace: '$build_dir'"
+    cd "$build_dir"
+
+    export CFG_AUTO_BUILDENV=${CFG_AUTO_BUILDENV:-1}
+    export CFG_BUILDENV=${CFG_BUILDENV:-'wschroot'}
+    export CFG_BUILDENV_SCRIPT=${CFG_BUILDENV_SCRIPT:-'/c4shares/auto/devutils/bin/gosp3-noNetwork'}
+    export CFG_CHROOT_SCRIPT=${CFG_CHROOT_SCRIPT:-'/c4shares/auto/devutils/bin/nosp'}
+    export CFG_CLEAN=${CFG_CLEAN:-1}
+    export CFG_MONITOR_CPU=${CFG_MONITOR_CPU:-1}
+    export CFG_MONITOR_DISK=${CFG_MONITOR_DISK:-1}
+    export CFG_MONITOR_MEMORY=${CFG_MONITOR_MEMORY:-1}
+    export CFG_MONITOR_NFS_CLIENT=${CFG_MONITOR_NFS_CLIENT:-1}
+    export CFG_MONITOR_NFS_SERVER=${CFG_MONITOR_NFS_SERVER:-1}
+    export CFG_USE_CCACHE="$cache_cfg"
+
+    # NOTE: Jenkins will garbage collect and clean up background php-endpoint process so wait for it
+    export CFG_LOG_BUILD_RESULT_BG=${CFG_LOG_BUILD_RESULT_BG:-0}
+
+    unset PERL5LIB
+    echo "CFG_FORCE_BUILD_ALL=${CFG_FORCE_BUILD_ALL:-1}" >> .build_all.cfg
+
+    build/build_all "$comps" || die "Issue executing build_all"
+
+    # set our files to correct permissions
+    local -r perms="$(id -u):$(id -g)"
+    sudo chown "$perms" -R "$build_dir" || die "Failed to set permissions on '$build_dir'"
+}
+
+#----------------------------------------------------------------------------------------------
+function updateRDBMS_BUILDMETRICS()
+{
+    local -r slave=$1
+    local -r build_dir=$2
+    local -r metadata=$3
+    local -r buildid=$4
+    local -r dbhost=$5
+    local -r dbname=$6
+    local -r dbuser=$7
+    local -r etl_sql=$8
+    local -r no_copy=$9
+
+    local -r output_dir="${build_dir}/output"
+    local FN_cleanUpShare
+    local FN_updateRDBMS
+    local shareFolderName
+    local report
+
+    if [[ "$no_copy" ]]; then
+        report="$REPORT2_CSV"
+        shareFolderName="$build_dir"
+
+        FN_cleanUpShare='cleanUpShare_fake'
+        FN_updateRDBMS='updateRDBMS_BUILDMETRICS_fake'
+    else
+        report="$REPORT_CSV"
+        shareFolderName="$( getShareFolderName "$slave" "$buildid" )"
+
+        # if "$dbhost" is unreachable, should perhaps set these to 'cleanUpShare_fake'/'updateRDBMS_fake' 
+        FN_cleanUpShare='cleanUpShare_live'
+        FN_updateRDBMS='updateRDBMS_BUILDMETRICS_live'
+    fi
+
+
+    #update database and cleanup
+    echo ''
+    "$FN_updateRDBMS" "$shareFolderName" "$output_dir" "$metadata" "$dbhost" "$dbname" "$dbuser" "$etl_sql"
+    reportCSVupdates "$shareFolderName" "$slave" "$report"
+    "$FN_cleanUpShare" "$shareFolderName"
+}
+
+#----------------------------------------------------------------------------------------------
+function updateRDBMS_BUILDMETRICS_live()
+{
+    local -r shareFolderName=$1
+    local -r output_dir=$2
+    local -r metadata=$3
+    local -r dbhost=$4
+    local -r dbname=$5
+    local -r dbuser=$6
+    local -r etl_sql=$7
+
+    echo 'update RDBMS'
+    ${PSQL} -h "${dbhost}" -U "${dbuser}" -d "${dbname}" -Ee -f "${etl_sql}"                        \
+            -v cpuFile="$( copyToShare "$shareFolderName" "${output_dir}/${CSV_CPU}" )"             \
+            -v diskFile="$( copyToShare "$shareFolderName" "${output_dir}/${CSV_DISK}" )"           \
+            -v eventFile="$( copyToShare "$shareFolderName" "${output_dir}/${CSV_EVENT}" )"         \
+            -v memoryFile="$( copyToShare "$shareFolderName" "${output_dir}/${CSV_MEMORY}" )"       \
+            -v componentFile="$( copyToShare "$shareFolderName" "${output_dir}/${CSV_COMPONENT}" )" \
+            -v warningsFile="$( copyToShare "$shareFolderName" "${output_dir}/${CSV_WARNINGS}" )"   \
+            -v buildmetadataFile="$( copyToShare "$shareFolderName" "$metadata" )"
+
+    local errorlevel=$?
+    if [[ $errorlevel -gt 0 ]]; then
+        echo ''
+        die "DB not updated due to issue executing: psql -f '${SQL_UPDATE}'\n   Error: ${errorlevel}"
+    fi
+}
+
+#----------------------------------------------------------------------------------------------
+function updateRDBMS_BUILDMETRICS_fake()
+{
+    local -r shareFolderName=$1
+    local -r output_dir=$2
+    local -r metadata=$3
+    local -r dbhost=$4
+    local -r dbname=$5
+    local -r dbuser=$6
+    local -r etl_sql=$7
+
+    echo 'Saving CSV files to share for later processing'
+    copyToShare "$shareFolderName" "${output_dir}/${CSV_CPU}"
+    copyToShare "$shareFolderName" "${output_dir}/${CSV_DISK}"
+    copyToShare "$shareFolderName" "${output_dir}/${CSV_EVENT}"
+    copyToShare "$shareFolderName" "${output_dir}/${CSV_MEMORY}"
+    copyToShare "$shareFolderName" "${output_dir}/${CSV_COMPONENT}"
+    copyToShare "$shareFolderName" "${output_dir}/${CSV_WARNINGS}"
+    copyToShare "$shareFolderName" "$metadata"
+}
+
+#----------------------------------------------------------------------------------------------
