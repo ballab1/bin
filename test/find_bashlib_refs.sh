@@ -1,7 +1,7 @@
 #!/bin/bash
 
 pwd
-declare grepExpr="($(find . -type f -name '*.bashlib' -exec basename '{}' \; | sed -e 's|.bashlib||' | tr '\n' '|' | sed 's/|$//'))\\.[a-z]+"
+declare grepExpr="($(find . -type f -name '*.bashlib' -exec basename '{}' \; | sed -e 's|.bashlib||' | tr '\n' '|' | sed 's/|$//'))\\.[a-z_A-Z]+"
 
 while read file;do
     echo -e "\n----$file"
