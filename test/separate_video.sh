@@ -22,6 +22,5 @@ while read -r srcfile; do
         echo "Moving: $srcfile → $dstfile"
         mv "$srcfile" "$dstfile"
     fi
-done < <(find "$SRC" -type f \( -iname "*.avi" -o -iname "*.mov" \) )
-
+done < <(find "$SRC" -type f \( -iname "*.avi" -o -iname "*.mov" -o -iname "*.m4a" -o -iname "*.mp4" -o -iname "*.pdd" -o -iname "*.psp" -o -iname "*.thm" -o -iname "*.wps" \) )
 
