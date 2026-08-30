@@ -1,12 +1,31 @@
 #!/bin/bash
 
 declare host="$(hostname -s)"
-for h in {1..8};do
-    [ "$h" = 2 ] && continue
-    [ "s$h" = "$host" ] && continue
-    echo "rebooting s$h"
-    ssh s$h 'sudo systemctl reboot'
-done
+declare myHost
 
-echo "rebooting $host"
-ssh "$host" 'sudo systemctl reboot'
+if [ $# = 0 ]; then
+  for h in {1..8};do
+      [ "$h" = 2 ] && continue
+      if [ "s$h" = "$host" ]; then
+	myHost="s$h"
+        continue
+      fi
+      echo "rebooting s$h"
+      ssh s$h 'sudo systemctl reboot'
+  done
+else
+  for h in "$@";do
+      [ "$h" = 2 ] && continue
+      if [ "s$h" = "$host" ]; then
+	myHost="s$h"
+        continue
+      fi
+      echo "rebooting s$h"
+      ssh s$h 'sudo systemctl reboot'
+  done
+fi
+
+if [ "${myHost:-}" ];then
+  echo "rebooting $myHost"
+  ssh "$myHost" 'sudo systemctl reboot'
+fi
